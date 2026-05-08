@@ -3,6 +3,7 @@ const maxTabsEl = document.getElementById("maxTabs");
 const blockedSitesEl = document.getElementById("blockedSites");
 const saveBtn = document.getElementById("saveBtn");
 const copyMdBtn = document.getElementById("copyMdBtn");
+const pasteHtmlBtn = document.getElementById("pasteHtmlBtn");
 
 async function loadSettings() {
   const data = await chrome.storage.sync.get([
@@ -182,6 +183,71 @@ if (openDashboardBtn) {
   openDashboardBtn.addEventListener("click", () => {
     // API ini secara otomatis akan membuka options/options.html di tab baru
     chrome.runtime.openOptionsPage();
+  });
+}
+
+if (pasteHtmlBtn) {
+  pasteHtmlBtn.addEventListener("click", async () => {
+    try {
+      // Manajemen state UI untuk feedback proses
+      const originalText = pasteHtmlBtn.innerText;
+      pasteHtmlBtn.innerText = "⏳ Membaca Memory...";
+      pasteHtmlBtn.disabled = true;
+
+      // 1. Ekstraksi buffer dari clipboard sistem operasi
+      const clipboardText = await navigator.clipboard.readText();
+
+      // Validasi integritas payload
+      if (!clipboardText || clipboardText.trim() === "") {
+        throw new Error(
+          "Buffer clipboard kosong atau tidak berisi string yang valid.",
+        );
+      }
+
+      // 2. Inisialisasi stream I/O file lokal via Blob API
+      // Menggunakan mime-type text/html agar dikenali sebagai dokumen web
+      const blob = new Blob([clipboardText], {
+        type: "text/html;charset=utf-8",
+      });
+      const objectUrl = URL.createObjectURL(blob);
+
+      const tempLink = document.createElement("a");
+      tempLink.href = objectUrl;
+
+      // 3. Standarisasi nomenklatur file menggunakan timestamp (Format: YYYYMMDDHHMMSS)
+      const dateObj = new Date();
+      const timestamp = dateObj
+        .toISOString()
+        .replace(/[-:T]/g, "")
+        .slice(0, 14);
+      tempLink.download = `snippet-${timestamp}.html`;
+
+      // 4. Eksekusi virtual click dan mitigasi memory leak
+      document.body.appendChild(tempLink);
+      tempLink.click();
+
+      setTimeout(() => {
+        document.body.removeChild(tempLink);
+        URL.revokeObjectURL(objectUrl);
+      }, 150);
+
+      // Kembalikan UI dengan konfirmasi sukses
+      pasteHtmlBtn.innerText = "File HTML Dibuat!";
+      setTimeout(() => {
+        pasteHtmlBtn.innerText = originalText;
+        pasteHtmlBtn.disabled = false;
+      }, 2000);
+    } catch (error) {
+      console.error(
+        "Kesalahan arsitektural saat membaca clipboard atau operasi I/O:",
+        error,
+      );
+      pasteHtmlBtn.innerText = "Clipboard Kosong / Ditolak";
+      setTimeout(() => {
+        pasteHtmlBtn.innerText = "Paste Code as .html";
+        pasteHtmlBtn.disabled = false;
+      }, 2000);
+    }
   });
 }
 
