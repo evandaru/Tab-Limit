@@ -1,0 +1,16 @@
+{
+    "manifest_version": 3,
+    "name": "Tab Limiter",
+    "version": "1.0",
+    "description": "Batasi jumlah tab Chrome",
+    "permissions": [
+        "tabs",
+        "storage"
+    ],
+    "action": {
+        "default_popup": "popup.html"
+    },
+    "background": {
+        "service_worker": "background.js"
+    }
+}
