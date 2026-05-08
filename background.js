@@ -83,44 +83,38 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
 // MODUL 2: CONTEXT MENU REGISTRY & ROUTER
 // ==========================================
 
-// Helper Function: Manajemen state visual pada ekstensi (Badge UI)
-const triggerBadgeFeedback = (tabId, text, color) => {
-  chrome.action.setBadgeText({ text, tabId });
-  chrome.action.setBadgeBackgroundColor({ color, tabId });
-  setTimeout(() => chrome.action.setBadgeText({ text: "", tabId }), 1500);
-};
-
-// 1. Registrasi Menu pada tahap instalasi/inisialisasi
 chrome.runtime.onInstalled.addListener(() => {
-  // Menu 1: Simpan teks biasa
+  // Menu Simpan/Copy Teks & Kode
   chrome.contextMenus.create({
     id: "save-text",
     title: "📝 Simpan Teks ke Dashboard",
     contexts: ["selection"],
   });
-
-  // Menu 2: Simpan sebagai kode
   chrome.contextMenus.create({
     id: "save-code",
     title: "💻 Simpan Kode ke Dashboard",
     contexts: ["selection"],
   });
 
-  // Menu 3: Langsung unduh sebagai file Markdown
+  // FITUR BARU: Copy Blog as MD (Berbasis DOM Parsing)
   chrome.contextMenus.create({
-    id: "download-md",
-    title: "⬇️ Unduh Seleksi sebagai .md",
+    id: "copy-blog-md",
+    title: "📋 Copy Seluruh Blog as MD",
+    contexts: ["page"],
+  });
+
+  // FITUR BARU: Save Code as HTML (Khusus untuk blok kode yang diseleksi)
+  chrome.contextMenus.create({
+    id: "save-code-html",
+    title: "📄 Save Seleksi as .html",
     contexts: ["selection"],
   });
 
-  // Garis Pemisah (Separator UI)
   chrome.contextMenus.create({
     id: "separator-1",
     type: "separator",
     contexts: ["all"],
   });
-
-  // Menu 4: Navigasi cepat ke Dashboard (Bisa diklik di mana saja, tanpa harus blok teks)
   chrome.contextMenus.create({
     id: "open-dashboard",
     title: "📁 Buka Dashboard Kutipan",
@@ -128,7 +122,69 @@ chrome.runtime.onInstalled.addListener(() => {
   });
 });
 
-// 2. Routing logic berdasarkan ID menu yang dipicu
+// Helper: Parser HTML ke Markdown (Fungsi yang akan diinjeksi)
+function htmlToMdParser() {
+  const rootNode =
+    document.querySelector("article") ||
+    document.querySelector("main") ||
+    document.body;
+  let markdown = "";
+  function traverse(node) {
+    const skipTags = [
+      "NAV",
+      "HEADER",
+      "FOOTER",
+      "ASIDE",
+      "SCRIPT",
+      "STYLE",
+      "NOSCRIPT",
+      "IFRAME",
+      "BUTTON",
+    ];
+    if (node.nodeType === 1 && skipTags.includes(node.tagName)) return;
+    if (node.nodeType === 1) {
+      const tag = node.tagName;
+      const text = node.innerText ? node.innerText.trim() : "";
+      if (!text && tag !== "BR" && tag !== "HR") return;
+      switch (tag) {
+        case "H1":
+          markdown += `\n# ${text}\n\n`;
+          break;
+        case "H2":
+          markdown += `\n## ${text}\n\n`;
+          break;
+        case "H3":
+          markdown += `\n### ${text}\n\n`;
+          break;
+        case "P":
+          markdown += `${text}\n\n`;
+          break;
+        case "UL":
+        case "OL":
+          Array.from(node.children).forEach((child, i) => {
+            if (child.tagName === "LI")
+              markdown += `${tag === "UL" ? "-" : i + 1 + "."} ${child.innerText.trim()}\n`;
+          });
+          markdown += "\n";
+          break;
+        case "PRE":
+        case "CODE":
+          if (tag === "PRE") markdown += `\n\`\`\`\n${text}\n\`\`\`\n\n`;
+          break;
+        default:
+          Array.from(node.childNodes).forEach(traverse);
+          break;
+      }
+    }
+  }
+  Array.from(rootNode.childNodes).forEach(traverse);
+  return {
+    title: document.title,
+    content: markdown.trim(),
+    url: window.location.href,
+  };
+}
+
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   try {
     switch (info.menuItemId) {
@@ -150,32 +206,42 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
         triggerBadgeFeedback(tab.id, "Code", "#0dcaf0");
         break;
 
-      case "download-md":
-        // Kompilasi struktur data Markdown
-        const dateStr = new Date().toLocaleDateString("id-ID");
-        const mdContent = `> ${info.selectionText.replace(/\n/g, "\n> ")}\n\n**Sumber:** [Tautan](${info.pageUrl})\n\n**Tanggal Arsip:** ${dateStr}`;
+      case "copy-blog-md":
+        const results = await chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          func: htmlToMdParser,
+        });
+        const data = results[0].result;
+        const finalMd = `# ${data.title}\n\n> **Source:** ${data.url}\n\n---\n\n${data.content}`;
 
-        // Transformasi string murni menjadi Data URI berbasis Base64 atau URI Component
+        // Mengirim ke clipboard melalui background memerlukan bantuan offscreen document atau scripting
+        await chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          func: (text) => navigator.clipboard.writeText(text),
+          args: [finalMd],
+        });
+        triggerBadgeFeedback(tab.id, "Copied", "#0d6efd");
+        break;
+
+      case "save-code-html":
+        // Mengambil seleksi sebagai HTML menggunakan blob
+        const htmlContent = info.selectionText; // info.selectionText hanya teks, jika ingin HTML butuh executeScript
         const dataUrl =
-          "data:text/markdown;charset=utf-8," + encodeURIComponent(mdContent);
-
-        // Eksekusi API unduhan tanpa memicu prompt 'Save As' untuk kecepatan
+          "data:text/html;charset=utf-8," + encodeURIComponent(htmlContent);
         chrome.downloads.download({
           url: dataUrl,
-          filename: `snippet-${new Date().getTime()}.md`,
+          filename: `snippet-${Date.now()}.html`,
           saveAs: false,
         });
-
-        triggerBadgeFeedback(tab.id, "Unduh", "#6f42c1");
+        triggerBadgeFeedback(tab.id, "HTML", "#0dcaf0");
         break;
 
       case "open-dashboard":
-        // Rutekan pengguna ke Options Page secara otomatis
         chrome.runtime.openOptionsPage();
         break;
     }
   } catch (error) {
-    console.error("Kesalahan arsitektural pada eksekusi Context Menu:", error);
+    console.error("Context Menu Error:", error);
   }
 });
 // ==========================================

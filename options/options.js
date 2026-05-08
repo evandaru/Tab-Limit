@@ -9,61 +9,113 @@ document.addEventListener("DOMContentLoaded", async () => {
   // ==========================================
   // MODUL 1: RENDER KUTIPAN / QUOTES
   // ==========================================
-  async function renderQuotes() {
+  async function renderQuotes(showAll = false) {
     const quotes = await StorageAPI.getQuotes();
+    const quoteListEl = document.getElementById("quoteList");
+    const seeMoreContainer = document.getElementById("seeMoreQuotesContainer");
+
     quoteListEl.innerHTML = "";
 
     if (quotes.length === 0) {
       quoteListEl.innerHTML = `<div class="empty-state"><p>Tidak ada kutipan tersimpan.</p></div>`;
-      exportBtn.style.opacity = "0.5";
-      exportBtn.style.pointerEvents = "none";
-      copyMdBtn.style.opacity = "0.5";
-      copyMdBtn.style.pointerEvents = "none";
+      seeMoreContainer.style.display = "none";
+      // Update state button export/copy
+      [exportBtn, copyMdBtn].forEach((btn) => {
+        btn.style.opacity = "0.5";
+        btn.style.pointerEvents = "none";
+      });
       clearBtn.style.display = "none";
-    } else {
-      exportBtn.style.opacity = "1";
-      exportBtn.style.pointerEvents = "auto";
-      copyMdBtn.style.opacity = "1";
-      copyMdBtn.style.pointerEvents = "auto";
-      clearBtn.style.display = "inline-block";
-
-      quotes
-        .slice()
-        .reverse()
-        .forEach((quote) => {
-          const dateStr = new Date(quote.timestamp).toLocaleString("id-ID", {
-            day: "2-digit",
-            month: "long",
-            year: "numeric",
-            hour: "2-digit",
-            minute: "2-digit",
-          });
-          const card = document.createElement("div");
-          card.className = "quote-card";
-          card.innerHTML = `
-          <div class="quote-text">"${quote.text}"</div>
-          <div class="meta">
-            <strong>Sumber:</strong> <a href="${quote.url}" target="_blank">${quote.url}</a><br>
-            <strong>Disimpan:</strong> ${dateStr}
-          </div>
-        `;
-          quoteListEl.appendChild(card);
-        });
+      return;
     }
+
+    // Aktifkan tombol aksi
+    [exportBtn, copyMdBtn].forEach((btn) => {
+      btn.style.opacity = "1";
+      btn.style.pointerEvents = "auto";
+    });
+    clearBtn.style.display = "inline-block";
+
+    // Logika Pemotongan Daftar (Top 5)
+    const reversedQuotes = quotes.slice().reverse();
+    const displayLimit = 5;
+    const itemsToRender = showAll
+      ? reversedQuotes
+      : reversedQuotes.slice(0, displayLimit);
+
+    // Tampilkan tombol "Lihat Semua" hanya jika data > 5 dan sedang dalam mode limit
+    if (reversedQuotes.length > displayLimit && !showAll) {
+      seeMoreContainer.style.display = "block";
+    } else {
+      seeMoreContainer.style.display = "none";
+    }
+
+    // Iterasi Render
+    itemsToRender.forEach((quote) => {
+      const dateStr = new Date(quote.timestamp).toLocaleString("id-ID", {
+        day: "2-digit",
+        month: "long",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+
+      const isLongText =
+        quote.text.length > 250 || (quote.text.match(/\n/g) || []).length > 4;
+      const textClass = isLongText ? "quote-text clamped" : "quote-text";
+      const toggleBtnHtml = isLongText
+        ? `<button class="btn-toggle-text">See More ▼</button>`
+        : "";
+
+      const card = document.createElement("div");
+      card.className = "quote-card";
+      card.innerHTML = `
+        <div class="quote-text-wrapper">
+          <div class="${textClass}">${quote.text.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</div>
+          ${toggleBtnHtml}
+        </div>
+        <div class="meta">
+          <strong>Source:</strong> <a href="${quote.url}" target="_blank">${quote.url}</a><br>
+          <strong>Saved:</strong> ${dateStr}
+        </div>
+      `;
+
+      // Event Listener: See More (Per Card)
+      if (isLongText) {
+        const btn = card.querySelector(".btn-toggle-text");
+        const textNode = card.querySelector(".quote-text");
+        btn.addEventListener("click", () => {
+          textNode.classList.toggle("clamped");
+          btn.innerText = textNode.classList.contains("clamped")
+            ? "See More ▼"
+            : "Show Less ▲";
+        });
+      }
+
+      quoteListEl.appendChild(card);
+    });
   }
+
+  const btnSeeAllQuotes = document.getElementById("btnSeeAllQuotes");
+  btnSeeAllQuotes.addEventListener("click", () => {
+    renderQuotes(true); // Panggil ulang fungsi dengan mode showAll = true
+  });
 
   // FUNGSI HELPER: Ekspor ke String
   async function generateMarkdownString() {
     const quotes = await StorageAPI.getQuotes();
     if (quotes.length === 0) return null;
+
     let mdContent = `# Kumpulan Kutipan\n\n*Diekspor pada ${new Date().toLocaleString("id-ID")}*\n\n---\n\n`;
+
     quotes
       .slice()
       .reverse()
       .forEach((quote) => {
         const dateStr = new Date(quote.timestamp).toLocaleString("id-ID");
-        mdContent += `> ${quote.text}\n\n**Sumber:** [${quote.url}](${quote.url})\n\n**Tanggal:** ${dateStr}\n\n---\n\n`;
+        // Tanda ">" dihapus pada baris di bawah ini
+        mdContent += `${quote.text}\n\n**Sumber:** [${quote.url}](${quote.url})\n\n**Tanggal:** ${dateStr}\n\n---\n\n`;
       });
+
     return mdContent;
   }
 
