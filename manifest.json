@@ -1,14 +1,16 @@
 {
     "manifest_version": 3,
     "name": "Fokus & Clipboard",
-    "version": "2.0.0",
+    "version": "2.1.0",
     "description": "Membatasi tab, memblokir distraksi, mengekstrak artikel, dan manajemen snippet.",
     "permissions": [
         "tabs",
         "storage",
         "scripting",
         "contextMenus",
-        "clipboardRead"
+        "clipboardRead",
+        "alarms",
+        "downloads"
     ],
     "host_permissions": [
         "*://*/*"
