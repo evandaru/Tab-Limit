@@ -3,6 +3,7 @@ import { triggerBadgeFeedback } from "../../shared/utils/ui-feedback.js";
 import { StorageAPI } from "../../shared/api/storage.js";
 import { handleDomExtractorMenu } from "../dom-extractor/parser.js";
 import { handleFakeFillerMenu } from "../fake-filler/filler-engine.js";
+import { handleLinkExtractorMenu } from "../link-extractor/engine.js";
 
 export function initContextMenus() {
   chrome.runtime.onInstalled.addListener(() => {
@@ -35,6 +36,12 @@ export function initContextMenus() {
       id: "save-code-html",
       title: "📄 Save Seleksi as .html",
       contexts: ["selection"],
+    });
+
+    chrome.contextMenus.create({
+      id: "copy-all-links",
+      title: "🔗 Copy Semua Link di Halaman",
+      contexts: ["page", "all"],
     });
 
     chrome.contextMenus.create({
@@ -85,6 +92,10 @@ export function initContextMenus() {
 
         case "fake-filler":
           await handleFakeFillerMenu(info, tab);
+          break;
+
+        case "copy-all-links": 
+          await handleLinkExtractorMenu(info, tab);
           break;
       }
     } catch (error) {
