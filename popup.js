@@ -2,7 +2,7 @@ const enabledEl = document.getElementById("enabled");
 const maxTabsEl = document.getElementById("maxTabs");
 const blockedSitesEl = document.getElementById("blockedSites");
 const saveBtn = document.getElementById("saveBtn");
-const saveMdBtn = document.getElementById("saveMdBtn"); // Referensi DOM baru
+const copyMdBtn = document.getElementById("copyMdBtn");
 
 async function loadSettings() {
   const data = await chrome.storage.sync.get([
@@ -33,22 +33,27 @@ saveBtn.addEventListener("click", async () => {
 });
 
 // Modul Ekspor Markdown
-saveMdBtn.addEventListener("click", async () => {
+copyMdBtn.addEventListener("click", async () => {
   try {
+    // Berikan feedback visual bahwa proses sedang berjalan
+    const originalText = copyMdBtn.innerText;
+    copyMdBtn.innerText = "⏳ Memproses...";
+    copyMdBtn.disabled = true;
+
     const [activeTab] = await chrome.tabs.query({
       active: true,
       currentWindow: true,
     });
 
-    if (!activeTab) return;
+    if (!activeTab) {
+      throw new Error("Tidak ada tab aktif.");
+    }
 
     // Injeksi engine parser langsung ke environment DOM tab yang sedang aktif
     const injectionResults = await chrome.scripting.executeScript({
       target: { tabId: activeTab.id },
       func: () => {
-        // ENGINE PARSER HTML KE MARKDOWN
-
-        // 1. Identifikasi kontainer semantik untuk menghindari scraping navbar/footer
+        // 1. Identifikasi kontainer semantik
         const rootNode =
           document.querySelector("article") ||
           document.querySelector("main") ||
@@ -57,7 +62,6 @@ saveMdBtn.addEventListener("click", async () => {
 
         // 2. Fungsi rekursif untuk melakukan traversal pada DOM Tree
         function traverse(node) {
-          // Abaikan elemen struktural antarmuka dan metadata
           const skipTags = [
             "NAV",
             "HEADER",
@@ -71,12 +75,10 @@ saveMdBtn.addEventListener("click", async () => {
           ];
           if (node.nodeType === 1 && skipTags.includes(node.tagName)) return;
 
-          // Eksekusi khusus untuk Node Element (Type 1)
           if (node.nodeType === 1) {
             const tag = node.tagName;
             const text = node.innerText ? node.innerText.trim() : "";
 
-            // Abaikan node kosong
             if (!text && tag !== "BR" && tag !== "HR") return;
 
             switch (tag) {
@@ -103,7 +105,6 @@ saveMdBtn.addEventListener("click", async () => {
                 break;
               case "UL":
               case "OL":
-                // Iterasi spesifik untuk ekstraksi list items
                 Array.from(node.children).forEach((child, index) => {
                   if (child.tagName === "LI") {
                     const prefix = tag === "UL" ? "-" : `${index + 1}.`;
@@ -122,9 +123,6 @@ saveMdBtn.addEventListener("click", async () => {
                 markdown += `\n> ${text.replace(/\n/g, "\n> ")}\n\n`;
                 break;
               default:
-                // Fallback: Jika berupa container (DIV, SECTION), telusuri children-nya
-                // Catatan: node spesifik seperti P atau UL tidak akan masuk ke sini
-                // sehingga mencegah isu duplikasi konten.
                 Array.from(node.childNodes).forEach(traverse);
                 break;
             }
@@ -160,38 +158,31 @@ saveMdBtn.addEventListener("click", async () => {
     finalMdContent += `---\n\n`;
     finalMdContent += articleContent;
 
-    // Manajemen I/O memori via Blob
-    const blob = new Blob([finalMdContent], {
-      type: "text/markdown;charset=utf-8",
-    });
-    const objectUrl = URL.createObjectURL(blob);
+    // EKSEKUSI COPY KE CLIPBOARD
+    await navigator.clipboard.writeText(finalMdContent);
 
-    const tempLink = document.createElement("a");
-    tempLink.href = objectUrl;
-
-    // Normalisasi penamaan file (Format: judul-artikel-bersih.md)
-    const fileName = safeTitle
-      .replace(/[^a-z0-9]/gi, "-")
-      .toLowerCase()
-      .replace(/-+/g, "-")
-      .replace(/^-|-$/g, "");
-    tempLink.download = `${fileName}.md`;
-
-    // Eksekusi trigger unduhan dan mitigasi memory leak
-    document.body.appendChild(tempLink);
-    tempLink.click();
-
+    // Kembalikan UI dengan pesan sukses sementara
+    copyMdBtn.innerText = "✅ Berhasil Disalin!";
     setTimeout(() => {
-      document.body.removeChild(tempLink);
-      URL.revokeObjectURL(objectUrl);
-    }, 150);
+      copyMdBtn.innerText = originalText;
+      copyMdBtn.disabled = false;
+    }, 2000);
   } catch (error) {
-    console.error(
-      "Kesalahan arsitektural saat parsing DOM atau konversi IO:",
-      error,
-    );
-    alert("Gagal melakukan scraping struktur konten halaman.");
+    console.error("Kesalahan saat parsing DOM atau menyalin:", error);
+    copyMdBtn.innerText = "❌ Gagal Menyalin";
+    setTimeout(() => {
+      copyMdBtn.innerText = "📋 Copy Blog as .md";
+      copyMdBtn.disabled = false;
+    }, 2000);
   }
 });
+
+const openDashboardBtn = document.getElementById("openDashboardBtn");
+if (openDashboardBtn) {
+  openDashboardBtn.addEventListener("click", () => {
+    // API ini secara otomatis akan membuka options/options.html di tab baru
+    chrome.runtime.openOptionsPage();
+  });
+}
 
 loadSettings();
