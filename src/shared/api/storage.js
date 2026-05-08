@@ -1,5 +1,3 @@
-// core/storage-api.js
-
 export const StorageAPI = {
   /**
    * Mengambil semua kutipan yang tersimpan.
