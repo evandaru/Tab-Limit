@@ -1,1123 +1,152 @@
-This file is a merged representation of the entire codebase, combined into a single document by Repomix.
-
-<file_summary>
-This section contains a summary of this file.
-
-<purpose>
-This file contains a packed representation of the entire repository's contents.
-It is designed to be easily consumable by AI systems for analysis, code review,
-or other automated processes.
-</purpose>
-
-<file_format>
-The content is organized as follows:
-1. This summary section
-2. Repository information
-3. Directory structure
-4. Repository files (if enabled)
-5. Multiple file entries, each consisting of:
-  - File path as an attribute
-  - Full contents of the file
-</file_format>
-
-<usage_guidelines>
-- This file should be treated as read-only. Any changes should be made to the
-  original repository files, not this packed version.
-- When processing this file, use the file path to distinguish
-  between different files in the repository.
-- Be aware that this file may contain sensitive information. Handle it with
-  the same level of security as you would the original repository.
-</usage_guidelines>
-
-<notes>
-- Some files may have been excluded based on .gitignore rules and Repomix's configuration
-- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
-- Files matching patterns in .gitignore are excluded
-- Files matching default ignore patterns are excluded
-- Files are sorted by Git change count (files with more changes are at the bottom)
-</notes>
-
-</file_summary>
-
-<directory_structure>
-core/
-  storage-api.js
-options/
-  options.html
-  options.js
-background.js
-manifest.json
-popup.html
-popup.js
-</directory_structure>
-
-<files>
-This section contains the contents of the repository's files.
-
-<file path="core/storage-api.js">
-// core/storage-api.js
-
-export const StorageAPI = {
-  /**
-   * Mengambil semua kutipan yang tersimpan.
-   * @returns {Promise<Array>} Array of saved items
-   */
-  async getQuotes() {
-    return new Promise((resolve) => {
-      chrome.storage.local.get({ savedQuotes: [] }, (result) => {
-        resolve(result.savedQuotes);
-      });
-    });
-  },
-
-  /**
-   * Menyimpan kutipan baru ke dalam storage.
-   * @param {Object} quoteData - { text, url, timestamp }
-   * @returns {Promise<void>}
-   */
-  async saveQuote(quoteData) {
-    const quotes = await this.getQuotes();
-    quotes.push(quoteData);
-    return new Promise((resolve) => {
-      chrome.storage.local.set({ savedQuotes: quotes }, () => {
-        resolve();
-      });
-    });
-  },
-
-  /**
-   * Menghapus semua data (opsional, untuk utilitas dasbor).
-   */
-  async clearQuotes() {
-    return new Promise((resolve) => {
-      chrome.storage.local.set({ savedQuotes: [] }, () => {
-        resolve();
-      });
-    });
-  }
-};
-</file>
-
-<file path="options/options.html">
-<!-- options/options.html -->
-<!doctype html>
-<html lang="id">
-  <head>
-    <meta charset="UTF-8" />
-    <title>Dashboard Kutipan | Save Clipboard</title>
-    <style>
-      body {
-        font-family: Arial, sans-serif;
-        background-color: #ffffff;
-        color: #000000;
-        margin: 20px;
-        line-height: 1.4;
-      }
-
-      .container {
-        max-width: 700px;
-        margin: 0 auto;
-      }
-
-      .header {
-        border-bottom: 1px solid #000000;
-        padding-bottom: 10px;
-        margin-bottom: 20px;
-      }
-
-      h1 {
-        font-size: 1.5rem;
-        margin: 0 0 10px 0;
-      }
-
-      .actions {
-        margin-bottom: 15px;
-      }
-
-      button {
-        padding: 5px 15px;
-        font-size: 12px;
-        margin-right: 5px;
-        cursor: pointer;
-        border: 1px solid #000000;
-        background-color: #f0f0f0;
-        font-family: inherit;
-      }
-
-      button:hover {
-        background-color: #e0e0e0;
-      }
-
-      .quote-card {
-        border: 1px solid #000000;
-        padding: 10px;
-        margin: 15px 0;
-        background: #ffffff;
-      }
-
-      .quote-text {
-        font-size: 1rem;
-        font-style: italic;
-        border-left: 3px solid #000000;
-        padding-left: 10px;
-        margin-bottom: 10px;
-      }
-
-      .meta {
-        font-size: 11px;
-        color: #333333;
-        background: #f5f5f5;
-        padding: 5px 8px;
-        border: 1px solid #cccccc;
-      }
-
-      .meta a {
-        color: #0000ff;
-        text-decoration: underline;
-        word-break: break-all;
-      }
-
-      .empty-state {
-        text-align: center;
-        padding: 30px;
-        border: 1px dashed #999999;
-        color: #666666;
-        margin: 20px 0;
-      }
-      /* Tambahan CSS Dashboard Analitik */
-      .dashboard-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-        gap: 15px;
-        margin-bottom: 25px;
-      }
-      .stat-card {
-        background: #f8f9fa;
-        border: 1px solid #dee2e6;
-        border-radius: 6px;
-        padding: 15px;
-        text-align: center;
-      }
-      .stat-value {
-        font-size: 1.5rem;
-        font-weight: bold;
-        color: #0056b3;
-        margin: 10px 0 5px;
-      }
-      .stat-label {
-        font-size: 12px;
-        color: #6c757d;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-      }
-    </style>
-  </head>
-  <body>
-    <div class="container">
-      <div class="header">
-        <h1>quotes</h1>
-        <div class="actions">
-          <button id="clearBtn">Hapus Semua</button>
-          <button id="exportBtn">Save as MD</button>
-          <!-- Tombol Baru -->
-          <button id="copyMdBtn">Copy as MD</button>
-        </div>
-      </div>
-      <!-- Modul Analitik Harian -->
-      <div class="dashboard-grid" id="analyticsDashboard">
-        <div class="stat-card">
-          <div class="stat-label">Top Website</div>
-          <div class="stat-value" id="statTopSite">-</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">Upaya Distraksi</div>
-          <div class="stat-value" id="statDistraction">0</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">Rata-rata Tab</div>
-          <div class="stat-value" id="statAvgTabs">0</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">Jam Produktif</div>
-          <div class="stat-value" id="statBestHour">-</div>
-        </div>
-      </div>
-      <div id="quoteList"></div>
-    </div>
-
-    <script type="module" src="options.js"></script>
-  </body>
-</html>
-</file>
-
-<file path="options/options.js">
-// options/options.js
-import { StorageAPI } from "../core/storage-api.js";
-
-document.addEventListener("DOMContentLoaded", async () => {
-  const quoteListEl = document.getElementById("quoteList");
-  const exportBtn = document.getElementById("exportBtn");
-  const copyMdBtn = document.getElementById("copyMdBtn"); // Referensi DOM baru
-  const clearBtn = document.getElementById("clearBtn");
-
-  async function renderQuotes() {
-    const quotes = await StorageAPI.getQuotes();
-    quoteListEl.innerHTML = "";
-
-    if (quotes.length === 0) {
-      quoteListEl.innerHTML = `
-        <div class="empty-state">
-          <span class="empty-icon">📝</span>
-          <p>none</p>
-        </div>
-      `;
-      // Mematikan fungsionalitas button jika state kosong
-      exportBtn.style.opacity = "0.5";
-      exportBtn.style.pointerEvents = "none";
-      copyMdBtn.style.opacity = "0.5";
-      copyMdBtn.style.pointerEvents = "none";
-      clearBtn.style.display = "none";
-    } else {
-      // Mengaktifkan kembali button
-      exportBtn.style.opacity = "1";
-      exportBtn.style.pointerEvents = "auto";
-      copyMdBtn.style.opacity = "1";
-      copyMdBtn.style.pointerEvents = "auto";
-      clearBtn.style.display = "inline-block";
-
-      quotes
-        .slice()
-        .reverse()
-        .forEach((quote) => {
-          const dateStr = new Date(quote.timestamp).toLocaleString("id-ID", {
-            day: "2-digit",
-            month: "long",
-            year: "numeric",
-            hour: "2-digit",
-            minute: "2-digit",
-          });
-          const card = document.createElement("div");
-          card.className = "quote-card";
-          card.innerHTML = `
-          <div class="quote-text">"${quote.text}"</div>
-          <div class="meta">
-            <strong>Sumber:</strong> <a href="${quote.url}" target="_blank">${quote.url}</a><br>
-            <strong>Disimpan:</strong> ${dateStr}
-          </div>
-        `;
-          quoteListEl.appendChild(card);
-        });
-    }
-  }
-
-  // Initial render
-  await renderQuotes();
-
-  // Handler Hapus Semua
-  clearBtn.addEventListener("click", async () => {
-    if (confirm("Apakah Anda yakin ingin menghapus semua kutipan?")) {
-      await StorageAPI.clearQuotes();
-      await renderQuotes();
-    }
-  });
-
-  // FUNGSI HELPER: Kompilasi payload state ke format string Markdown
-  async function generateMarkdownString() {
-    const quotes = await StorageAPI.getQuotes();
-    if (quotes.length === 0) return null;
-
-    let mdContent = `# Kumpulan Kutipan\n\n`;
-    mdContent += `*Diekspor pada ${new Date().toLocaleString("id-ID")}*\n\n---\n\n`;
-
-    quotes
-      .slice()
-      .reverse()
-      .forEach((quote) => {
-        const dateStr = new Date(quote.timestamp).toLocaleString("id-ID");
-        mdContent += `> ${quote.text}\n\n`;
-        mdContent += `**Sumber:** [${quote.url}](${quote.url})\n\n`;
-        mdContent += `**Tanggal Disimpan:** ${dateStr}\n\n`;
-        mdContent += `---\n\n`;
-      });
-
-    return mdContent;
-  }
-
-  // Handler ekspor ke file Markdown (.md)
-  exportBtn.addEventListener("click", async () => {
-    const mdContent = await generateMarkdownString();
-    if (!mdContent) return;
-
-    const blob = new Blob([mdContent], { type: "text/markdown;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `kutipan-${new Date().toISOString().split("T")[0]}.md`;
-    document.body.appendChild(a);
-    a.click();
-
-    setTimeout(() => {
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    }, 100);
-  });
-
-  // -----------------------------------------------------
-  // MODUL BARU: Copy Markdown ke Clipboard (via navigator API)
-  // -----------------------------------------------------
-  copyMdBtn.addEventListener("click", async () => {
-    try {
-      const originalText = copyMdBtn.innerText;
-      copyMdBtn.innerText = "⏳ Menyalin...";
-      copyMdBtn.disabled = true;
-
-      const mdContent = await generateMarkdownString();
-
-      if (!mdContent) {
-        throw new Error("State kutipan kosong");
-      }
-
-      await navigator.clipboard.writeText(mdContent);
-
-      copyMdBtn.innerText = "✅ Tersalin!";
-      setTimeout(() => {
-        copyMdBtn.innerText = originalText;
-        copyMdBtn.disabled = false;
-      }, 2000);
-    } catch (error) {
-      console.error("Proses copy ke clipboard sistem gagal dieksekusi:", error);
-      copyMdBtn.innerText = "❌ Gagal";
-      setTimeout(() => {
-        copyMdBtn.innerText = "Copy as MD";
-        copyMdBtn.disabled = false;
-      }, 2000);
-    }
-  });
-
-  // ==========================================
-  // MODUL ANALITIK (Dashboard Data Processing)
-  // ==========================================
-  async function renderAnalytics() {
-    const todayKey = `analytics_${new Date().toISOString().split('T')[0]}`;
-    const data = await chrome.storage.local.get(todayKey);
-    const stats = data[todayKey];
-
-    if (!stats) return; // Jika belum ada data hari ini, biarkan default
-
-    // 1. Kalkulasi Website Paling Sering Dibuka
-    if (Object.keys(stats.domains).length > 0) {
-      const topDomain = Object.keys(stats.domains).reduce((a, b) => 
-        stats.domains[a] > stats.domains[b] ? a : b
-      );
-      document.getElementById('statTopSite').innerText = topDomain.replace('www.', '');
-      // Opsional: Anda bisa memformat waktu misal -> github.com (2j)
-    }
-
-    // 2. Total Upaya Distraksi (Situs diblokir yang mencoba diakses)
-    document.getElementById('statDistraction').innerText = stats.distractions || 0;
-
-    // 3. Kalkulasi Rata-rata Tab
-    if (stats.tabSamples && stats.tabSamples.length > 0) {
-      const sum = stats.tabSamples.reduce((a, b) => a + b, 0);
-      const avg = (sum / stats.tabSamples.length).toFixed(1);
-      document.getElementById('statAvgTabs').innerText = avg;
-    }
-
-    // 4. Kalkulasi Jam Paling Produktif (Berdasarkan waktu aktif terbanyak)
-    if (Object.keys(stats.hourly).length > 0) {
-      const bestHourStr = Object.keys(stats.hourly).reduce((a, b) => 
-        stats.hourly[a] > stats.hourly[b] ? a : b
-      );
-      document.getElementById('statBestHour').innerText = `${bestHourStr}:00`;
-    }
-  }
-
-  // Panggil fungsi render analitik bersamaan dengan render kutipan
-  await renderAnalytics();
-});
-</file>
-
-<file path="background.js">
-import { StorageAPI } from "./core/storage-api.js";
-
-// ==========================================
-// MODUL 1: MODE FOKUS (Limitasi Tab & Site Blocker)
-// ==========================================
-let stateCache = {
-  enabled: true,
-  maxTabs: 5,
-  blockedSites: [],
-};
-
-chrome.storage.sync.get(["enabled", "maxTabs", "blockedSites"], (data) => {
-  stateCache.enabled = data.enabled ?? true;
-  stateCache.maxTabs = data.maxTabs ?? 5;
-  stateCache.blockedSites = data.blockedSites ?? [];
-});
-
-chrome.storage.onChanged.addListener((changes, namespace) => {
-  if (namespace === "sync") {
-    if (changes.enabled) stateCache.enabled = changes.enabled.newValue;
-    if (changes.maxTabs) stateCache.maxTabs = changes.maxTabs.newValue;
-    if (changes.blockedSites)
-      stateCache.blockedSites = changes.blockedSites.newValue;
-  }
-});
-
-function isUrlBlocked(targetUrl) {
-  try {
-    const urlObj = new URL(targetUrl);
-    return stateCache.blockedSites.some((site) =>
-      urlObj.hostname.includes(site),
-    );
-  } catch (error) {
-    return false;
-  }
-}
-
-chrome.tabs.onCreated.addListener(async (tab) => {
-  if (!stateCache.enabled) return;
-  const tabs = await chrome.tabs.query({ currentWindow: true });
-  if (tabs.length > stateCache.maxTabs) {
-    chrome.tabs.remove(tab.id);
-  }
-});
-
-chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-  if (!stateCache.enabled) return;
-  if (changeInfo.url) {
-    if (isUrlBlocked(changeInfo.url)) {
-      chrome.tabs.remove(tabId);
-    }
-  }
-});
-
-// ==========================================
-// MODUL 2: CLIPBOARD MANAGER (Context Menu)
-// ==========================================
-chrome.runtime.onInstalled.addListener(() => {
-  chrome.contextMenus.create({
-    id: "save-clipboard",
-    title: "Simpan ke Dashboard Kutipan",
-    contexts: ["selection"],
-  });
-});
-
-chrome.contextMenus.onClicked.addListener(async (info, tab) => {
-  if (info.menuItemId === "save-clipboard") {
-    try {
-      const newQuote = {
-        text: info.selectionText,
-        url: info.pageUrl,
-        timestamp: new Date().toISOString(),
-      };
-
-      await StorageAPI.saveQuote(newQuote);
-
-      // Indikator visual sukses pada badge ekstensi
-      chrome.action.setBadgeText({ text: "✓", tabId: tab.id });
-      chrome.action.setBadgeBackgroundColor({
-        color: "#198754",
-        tabId: tab.id,
-      });
-      setTimeout(
-        () => chrome.action.setBadgeText({ text: "", tabId: tab.id }),
-        1500,
-      );
-    } catch (error) {
-      console.error("Gagal melakukan operasi write ke storage:", error);
-    }
-  }
-});
-
-// ==========================================
-// MODUL 3: TELEMETRY ENGINE (Analytics)
-// ==========================================
-let activeSession = { domain: null, startTime: null };
-
-// Helper: Mendapatkan kunci tanggal hari ini (Format: YYYY-MM-DD)
-function getTodayKey() {
-  return `analytics_${new Date().toISOString().split("T")[0]}`;
-}
-
-// Helper: Menginisialisasi atau mengambil data analitik hari ini
-async function getDailyStats() {
-  const key = getTodayKey();
-  const data = await chrome.storage.local.get(key);
-  return (
-    data[key] || {
-      domains: {}, // Durasi per domain (dalam detik)
-      distractions: 0, // Jumlah upaya membuka situs diblokir
-      tabSamples: [], // Sampel jumlah tab untuk rata-rata
-      hourly: {}, // Distribusi waktu aktif per jam (00-23)
-    }
-  );
-}
-
-// Helper: Menyimpan durasi sesi yang baru selesai
-async function commitSessionTime() {
-  if (!activeSession.domain || !activeSession.startTime) return;
-
-  const endTime = Date.now();
-  const durationSecs = Math.floor((endTime - activeSession.startTime) / 1000);
-
-  // Abaikan sesi anomali (misal: kurang dari 1 detik atau SW tertidur sangat lama)
-  if (durationSecs > 0 && durationSecs < 86400) {
-    const stats = await getDailyStats();
-    const currentHour = new Date().getHours().toString().padStart(2, "0");
-
-    // Agregasi Data
-    stats.domains[activeSession.domain] =
-      (stats.domains[activeSession.domain] || 0) + durationSecs;
-    stats.hourly[currentHour] = (stats.hourly[currentHour] || 0) + durationSecs;
-
-    const key = getTodayKey();
-    await chrome.storage.local.set({ [key]: stats });
-  }
-
-  activeSession = { domain: null, startTime: null };
-}
-
-// Listener: Melacak pergantian Tab
-chrome.tabs.onActivated.addListener(async (activeInfo) => {
-  await commitSessionTime(); // Simpan sesi tab sebelumnya
-
-  try {
-    const tab = await chrome.tabs.get(activeInfo.tabId);
-    if (tab.url && !tab.url.startsWith("chrome://")) {
-      activeSession.domain = new URL(tab.url).hostname;
-      activeSession.startTime = Date.now();
-    }
-  } catch (error) {
-    // Tab mungkin sudah ditutup atau tidak dapat diakses
-  }
-});
-
-// Listener: Melacak pergantian window (Fokus OS)
-chrome.windows.onFocusChanged.addListener(async (windowId) => {
-  if (windowId === chrome.windows.WINDOW_ID_NONE) {
-    // User minimize browser atau pindah ke aplikasi lain
-    await commitSessionTime();
-  } else {
-    // User kembali ke browser, mulai hitung ulang tab yang sedang aktif
-    const [tab] = await chrome.tabs.query({ active: true, windowId: windowId });
-    if (tab && tab.url && !tab.url.startsWith("chrome://")) {
-      activeSession.domain = new URL(tab.url).hostname;
-      activeSession.startTime = Date.now();
-    }
-  }
-});
-
-// Listener: Polling sampel jumlah tab saat ada tab baru dibuat
-chrome.tabs.onCreated.addListener(async (tab) => {
-  // Modul pemblokir tab ada di bagian atas background.js Anda
-  const tabs = await chrome.tabs.query({ currentWindow: true });
-  const stats = await getDailyStats();
-  stats.tabSamples.push(tabs.length);
-
-  // Batasi array sampel agar tidak membebani memory storage
-  if (stats.tabSamples.length > 100) stats.tabSamples.shift();
-
-  const key = getTodayKey();
-  await chrome.storage.local.set({ [key]: stats });
-});
-
-// ==========================================
-// MODUL 3: TELEMETRY ENGINE (Analytics)
-// ==========================================
-let activeSession = { domain: null, startTime: null };
-
-// Helper: Mendapatkan kunci tanggal hari ini (Format: YYYY-MM-DD)
-function getTodayKey() {
-  return `analytics_${new Date().toISOString().split('T')[0]}`;
-}
-
-// Helper: Menginisialisasi atau mengambil data analitik hari ini
-async function getDailyStats() {
-  const key = getTodayKey();
-  const data = await chrome.storage.local.get(key);
-  return data[key] || {
-    domains: {},         // Durasi per domain (dalam detik)
-    distractions: 0,     // Jumlah upaya membuka situs diblokir
-    tabSamples: [],      // Sampel jumlah tab untuk rata-rata
-    hourly: {}           // Distribusi waktu aktif per jam (00-23)
-  };
-}
-
-// Helper: Menyimpan durasi sesi yang baru selesai
-async function commitSessionTime() {
-  if (!activeSession.domain || !activeSession.startTime) return;
-
-  const endTime = Date.now();
-  const durationSecs = Math.floor((endTime - activeSession.startTime) / 1000);
-  
-  // Abaikan sesi anomali (misal: kurang dari 1 detik atau SW tertidur sangat lama)
-  if (durationSecs > 0 && durationSecs < 86400) {
-    const stats = await getDailyStats();
-    const currentHour = new Date().getHours().toString().padStart(2, '0');
-
-    // Agregasi Data
-    stats.domains[activeSession.domain] = (stats.domains[activeSession.domain] || 0) + durationSecs;
-    stats.hourly[currentHour] = (stats.hourly[currentHour] || 0) + durationSecs;
-
-    const key = getTodayKey();
-    await chrome.storage.local.set({ [key]: stats });
-  }
-
-  activeSession = { domain: null, startTime: null };
-}
-
-// Listener: Melacak pergantian Tab
-chrome.tabs.onActivated.addListener(async (activeInfo) => {
-  await commitSessionTime(); // Simpan sesi tab sebelumnya
-  
-  try {
-    const tab = await chrome.tabs.get(activeInfo.tabId);
-    if (tab.url && !tab.url.startsWith('chrome://')) {
-      activeSession.domain = new URL(tab.url).hostname;
-      activeSession.startTime = Date.now();
-    }
-  } catch (error) {
-    // Tab mungkin sudah ditutup atau tidak dapat diakses
-  }
-});
-
-// Listener: Melacak pergantian window (Fokus OS)
-chrome.windows.onFocusChanged.addListener(async (windowId) => {
-  if (windowId === chrome.windows.WINDOW_ID_NONE) {
-    // User minimize browser atau pindah ke aplikasi lain
-    await commitSessionTime();
-  } else {
-    // User kembali ke browser, mulai hitung ulang tab yang sedang aktif
-    const [tab] = await chrome.tabs.query({ active: true, windowId: windowId });
-    if (tab && tab.url && !tab.url.startsWith('chrome://')) {
-      activeSession.domain = new URL(tab.url).hostname;
-      activeSession.startTime = Date.now();
-    }
-  }
-});
-
-// Listener: Polling sampel jumlah tab saat ada tab baru dibuat
-chrome.tabs.onCreated.addListener(async (tab) => {
-  // Modul pemblokir tab ada di bagian atas background.js Anda
-  const tabs = await chrome.tabs.query({ currentWindow: true });
-  const stats = await getDailyStats();
-  stats.tabSamples.push(tabs.length);
-  
-  // Batasi array sampel agar tidak membebani memory storage
-  if (stats.tabSamples.length > 100) stats.tabSamples.shift();
-  
-  const key = getTodayKey();
-  await chrome.storage.local.set({ [key]: stats });
-});
-</file>
-
-<file path="manifest.json">
-{
-    "manifest_version": 3,
-    "name": "Fokus & Clipboard",
-    "version": "2.0.0",
-    "description": "Membatasi tab, memblokir distraksi, mengekstrak artikel, dan manajemen snippet.",
-    "permissions": [
-        "tabs",
-        "storage",
-        "scripting",
-        "contextMenus",
-        "clipboardRead"
-    ],
-    "host_permissions": [
-        "*://*/*"
-    ],
-    "icons": {
-        "16": "assets/icon-16.png"
-    },
-    "action": {
-        "default_popup": "popup.html",
-        "default_icon": {
-            "16": "assets/icon-16.png"
-        }
-    },
-    "background": {
-        "service_worker": "background.js",
-        "type": "module"
-    },
-    "options_page": "options/options.html"
-}
-</file>
-
-<file path="popup.html">
-<!doctype html>
-<html>
-  <head>
-    <style>
-      body {
-        font-family:
-          system-ui,
-          -apple-system,
-          sans-serif;
-        width: 250px;
-        padding: 16px;
-        color: #333;
-      }
-      .row {
-        margin-bottom: 16px;
-      }
-      label {
-        display: block;
-        font-size: 13px;
-        margin-bottom: 6px;
-        font-weight: 500;
-      }
-      .checkbox-label {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        margin-bottom: 0;
-      }
-      input[type="number"],
-      textarea {
-        width: 100%;
-        padding: 8px;
-        box-sizing: border-box;
-        border: 1px solid #ccc;
-        border-radius: 4px;
-        font-family: monospace;
-      }
-      textarea {
-        resize: vertical;
-      }
-      button {
-        width: 100%;
-        padding: 10px;
-        background-color: #0056b3;
-        color: white;
-        border: none;
-        border-radius: 4px;
-        cursor: pointer;
-        font-weight: bold;
-        margin-bottom: 8px;
-      }
-      button:hover {
-        background-color: #004494;
-      }
-      .btn-success {
-        background-color: #198754;
-      }
-      .btn-success:hover {
-        background-color: #157347;
-      }
-      hr {
-        border: 0;
-        border-top: 1px solid #eaeaea;
-        margin: 16px 0;
-      }
-    </style>
-  </head>
-  <body>
-    <div class="row">
-      <label class="checkbox-label">
-        <input type="checkbox" id="enabled" />
-        Aktifkan Mode Fokus
-      </label>
-    </div>
-
-    <div class="row">
-      <label for="maxTabs">Batas Maksimal Tab</label>
-      <input type="number" id="maxTabs" min="1" />
-    </div>
-
-    <div class="row">
-      <label for="blockedSites"
-        >Blokir Situs (pisahkan dengan koma atau baris baru)</label
-      >
-      <textarea
-        id="blockedSites"
-        rows="4"
-        placeholder="facebook.com&#10;twitter.com"
-      ></textarea>
-    </div>
-
-    <button id="saveBtn">Simpan Pengaturan</button>
-
-    <button id="copyMdBtn" class="btn-success">Copy Blog as .md</button>
-
-    <button
-      id="pasteHtmlBtn"
-      class="btn-secondary"
-      style="background-color: #0dcaf0; color: #000; margin-top: 8px"
-    >
-      Paste Code as .html
-    </button>
-
-    <button
-      id="openDashboardBtn"
-      class="btn-secondary"
-      style="background-color: #6c757d; color: white; margin-top: 8px"
-    >
-      Buka Dashboard Kutipan
-    </button>
-
-    <script src="popup.js"></script>
-  </body>
-</html>
-</file>
-
-<file path="popup.js">
-const enabledEl = document.getElementById("enabled");
-const maxTabsEl = document.getElementById("maxTabs");
-const blockedSitesEl = document.getElementById("blockedSites");
-const saveBtn = document.getElementById("saveBtn");
-const copyMdBtn = document.getElementById("copyMdBtn");
-const pasteHtmlBtn = document.getElementById("pasteHtmlBtn");
-
-async function loadSettings() {
-  const data = await chrome.storage.sync.get([
-    "enabled",
-    "maxTabs",
-    "blockedSites",
-  ]);
-
-  enabledEl.checked = data.enabled ?? true;
-  maxTabsEl.value = data.maxTabs ?? 5;
-  blockedSitesEl.value = (data.blockedSites ?? []).join("\n");
-}
-
-saveBtn.addEventListener("click", async () => {
-  const rawSites = blockedSitesEl.value.split(/\r?\n|,/);
-
-  const sanitizedSites = rawSites
-    .map((site) => site.trim().toLowerCase())
-    .filter((site) => site.length > 0);
-
-  await chrome.storage.sync.set({
-    enabled: enabledEl.checked,
-    maxTabs: Number(maxTabsEl.value),
-    blockedSites: sanitizedSites,
-  });
-
-  alert("Pengaturan Mode Fokus berhasil disimpan!");
-});
-
-// Modul Ekspor Markdown
-copyMdBtn.addEventListener("click", async () => {
-  try {
-    // Berikan feedback visual bahwa proses sedang berjalan
-    const originalText = copyMdBtn.innerText;
-    copyMdBtn.innerText = "⏳ Memproses...";
-    copyMdBtn.disabled = true;
-
-    const [activeTab] = await chrome.tabs.query({
-      active: true,
-      currentWindow: true,
-    });
-
-    if (!activeTab) {
-      throw new Error("Tidak ada tab aktif.");
-    }
-
-    // Injeksi engine parser langsung ke environment DOM tab yang sedang aktif
-    const injectionResults = await chrome.scripting.executeScript({
-      target: { tabId: activeTab.id },
-      func: () => {
-        // 1. Identifikasi kontainer semantik
-        const rootNode =
-          document.querySelector("article") ||
-          document.querySelector("main") ||
-          document.body;
-        let markdown = "";
-
-        // 2. Fungsi rekursif untuk melakukan traversal pada DOM Tree
-        function traverse(node) {
-          const skipTags = [
-            "NAV",
-            "HEADER",
-            "FOOTER",
-            "ASIDE",
-            "SCRIPT",
-            "STYLE",
-            "NOSCRIPT",
-            "IFRAME",
-            "BUTTON",
-          ];
-          if (node.nodeType === 1 && skipTags.includes(node.tagName)) return;
-
-          if (node.nodeType === 1) {
-            const tag = node.tagName;
-            const text = node.innerText ? node.innerText.trim() : "";
-
-            if (!text && tag !== "BR" && tag !== "HR") return;
-
-            switch (tag) {
-              case "H1":
-                markdown += `\n# ${text}\n\n`;
-                break;
-              case "H2":
-                markdown += `\n## ${text}\n\n`;
-                break;
-              case "H3":
-                markdown += `\n### ${text}\n\n`;
-                break;
-              case "H4":
-                markdown += `\n#### ${text}\n\n`;
-                break;
-              case "H5":
-                markdown += `\n##### ${text}\n\n`;
-                break;
-              case "H6":
-                markdown += `\n###### ${text}\n\n`;
-                break;
-              case "P":
-                markdown += `${text}\n\n`;
-                break;
-              case "UL":
-              case "OL":
-                Array.from(node.children).forEach((child, index) => {
-                  if (child.tagName === "LI") {
-                    const prefix = tag === "UL" ? "-" : `${index + 1}.`;
-                    markdown += `${prefix} ${child.innerText.trim()}\n`;
-                  }
-                });
-                markdown += "\n";
-                break;
-              case "PRE":
-              case "CODE":
-                if (tag === "PRE") {
-                  markdown += `\n\`\`\`\n${text}\n\`\`\`\n\n`;
-                }
-                break;
-              case "BLOCKQUOTE":
-                markdown += `\n> ${text.replace(/\n/g, "\n> ")}\n\n`;
-                break;
-              default:
-                Array.from(node.childNodes).forEach(traverse);
-                break;
-            }
-          }
-        }
-
-        // Inisiasi eksekusi rekursif
-        Array.from(rootNode.childNodes).forEach(traverse);
-
-        return markdown.trim();
-      },
-    });
-
-    // Validasi payload dari hasil parsing DOM
-    const articleContent =
-      injectionResults[0]?.result ||
-      "Konten gagal diekstrak atau halaman kosong.";
-
-    // Kompilasi struktur data Markdown akhir
-    const dateStr = new Date().toLocaleDateString("id-ID", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    });
-    const safeTitle = (activeTab.title || "Untitled-Blog").replace(
-      /\[|\]/g,
-      "",
-    );
-
-    let finalMdContent = `# ${safeTitle}\n\n`;
-    finalMdContent += `> **URL Referensi:** [Tautan](${activeTab.url})\n`;
-    finalMdContent += `> **Tanggal Arsip:** ${dateStr}\n\n`;
-    finalMdContent += `---\n\n`;
-    finalMdContent += articleContent;
-
-    // EKSEKUSI COPY KE CLIPBOARD
-    await navigator.clipboard.writeText(finalMdContent);
-
-    // Kembalikan UI dengan pesan sukses sementara
-    copyMdBtn.innerText = "✅ Berhasil Disalin!";
-    setTimeout(() => {
-      copyMdBtn.innerText = originalText;
-      copyMdBtn.disabled = false;
-    }, 2000);
-  } catch (error) {
-    console.error("Kesalahan saat parsing DOM atau menyalin:", error);
-    copyMdBtn.innerText = "❌ Gagal Menyalin";
-    setTimeout(() => {
-      copyMdBtn.innerText = "📋 Copy Blog as .md";
-      copyMdBtn.disabled = false;
-    }, 2000);
-  }
-});
-
-const openDashboardBtn = document.getElementById("openDashboardBtn");
-if (openDashboardBtn) {
-  openDashboardBtn.addEventListener("click", () => {
-    // API ini secara otomatis akan membuka options/options.html di tab baru
-    chrome.runtime.openOptionsPage();
-  });
-}
-
-if (pasteHtmlBtn) {
-  pasteHtmlBtn.addEventListener("click", async () => {
-    try {
-      // Manajemen state UI untuk feedback proses
-      const originalText = pasteHtmlBtn.innerText;
-      pasteHtmlBtn.innerText = "⏳ Membaca Memory...";
-      pasteHtmlBtn.disabled = true;
-
-      // 1. Ekstraksi buffer dari clipboard sistem operasi
-      const clipboardText = await navigator.clipboard.readText();
-
-      // Validasi integritas payload
-      if (!clipboardText || clipboardText.trim() === "") {
-        throw new Error(
-          "Buffer clipboard kosong atau tidak berisi string yang valid.",
-        );
-      }
-
-      // 2. Inisialisasi stream I/O file lokal via Blob API
-      // Menggunakan mime-type text/html agar dikenali sebagai dokumen web
-      const blob = new Blob([clipboardText], {
-        type: "text/html;charset=utf-8",
-      });
-      const objectUrl = URL.createObjectURL(blob);
-
-      const tempLink = document.createElement("a");
-      tempLink.href = objectUrl;
-
-      // 3. Standarisasi nomenklatur file menggunakan timestamp (Format: YYYYMMDDHHMMSS)
-      const dateObj = new Date();
-      const timestamp = dateObj
-        .toISOString()
-        .replace(/[-:T]/g, "")
-        .slice(0, 14);
-      tempLink.download = `snippet-${timestamp}.html`;
-
-      // 4. Eksekusi virtual click dan mitigasi memory leak
-      document.body.appendChild(tempLink);
-      tempLink.click();
-
-      setTimeout(() => {
-        document.body.removeChild(tempLink);
-        URL.revokeObjectURL(objectUrl);
-      }, 150);
-
-      // Kembalikan UI dengan konfirmasi sukses
-      pasteHtmlBtn.innerText = "File HTML Dibuat!";
-      setTimeout(() => {
-        pasteHtmlBtn.innerText = originalText;
-        pasteHtmlBtn.disabled = false;
-      }, 2000);
-    } catch (error) {
-      console.error(
-        "Kesalahan arsitektural saat membaca clipboard atau operasi I/O:",
-        error,
-      );
-      pasteHtmlBtn.innerText = "Clipboard Kosong / Ditolak";
-      setTimeout(() => {
-        pasteHtmlBtn.innerText = "Paste Code as .html";
-        pasteHtmlBtn.disabled = false;
-      }, 2000);
-    }
-  });
-}
-
-loadSettings();
-</file>
-
-</files>
+# input fake html - Google Search
+
+> **Source:** https://www.google.com/search?q=input+fake+html&num=10&newwindow=1&sca_esv=006cc6ae2b186464&sxsrf=ANbL-n6BY-nTFccxuVp6TkQUwt-ID1onig%3A1778266971888&ei=WzP-ad_uNcyH4-EPj7qFsAE&biw=1397&bih=833&ved=0ahUKEwifiLPZsKqUAxXMwzgGHQ9dARYQ4dUDCBE&uact=5&oq=input+fake+html&gs_lp=Egxnd3Mtd2l6LXNlcnAiD2lucHV0IGZha2UgaHRtbDIFECEYoAEyBRAhGKABMgUQIRigATIFECEYoAEyBRAhGJ8FMgUQIRifBTIFECEYnwVIpgpQ3wFY1whwAXgBkAEAmAFcoAGkA6oBATW4AQPIAQD4AQGYAgagAsgDwgIKEAAYRxjWBBiwA8ICBhAAGBYYHpgDAIgGAZAGCJIHAzUuMaAH-huyBwM0LjG4B8MDwgcFMC4xLjXIBxWACAE&sclient=gws-wiz-serp
+
+---
+
+# Search Results
+
+
+```
+<form>
+  <input type="hidden" name="user_id" value="12345">
+  <input type="text" name="username" placeholder="Visible Input">
+</form>
+```
+
+
+```
+<div contenteditable="true" style="border: 1px solid #ccc; padding: 10px;">
+  This text can be edited, but it's not a real input field.
+</div>
+```
+
+
+```
+<label for="fake-field" style="border: 1px solid black; padding: 5px;">
+  Clicking here activates the hidden checkbox
+</label>
+<input type="checkbox" id="fake-field" style="display:none;">
+```
+
+- how can i create fake input in html and javascript
+11 Oct 2017 — You can create fake input in HTML and JavaScript without using text areas, hidden inputs, or contenteditable attributes. You can u...
+Stack Overflow
+- - HTML | MDN
+22 Apr 2026 — Hidden inputs are elements that allow web developers to include data that cannot be seen or modified by users when a form is submi...
+MDN Web Docs
+- How we built the real demo for our fake CSS API client - Algolia Blog
+2 Mar 2023 — Faceting. The last feature to add was the filtering (or faceting, as we call it in the search industry). Faceting is extremely imp...
+Algolia
+
+
+## Web results
+
+
+### how can i create fake input in html and javascript
+
+
+### Fake Code!
+
+
+### fake-form.html
+
+- </p> (Closing Tag): Signals the end of the current paragraph.
+- <p> (Opening Tag): Signals the start of a new paragraph. HTML.com +3
+
+- Spacing: Browsers automatically add a small amount of white space (a margin) between these two elements to visually separate the paragraphs.
+- Structure: It turns continuous text into distinct, readable chunks. Lenovo +2
+
+
+```
+<p>This is the first paragraph.</p>
+<p>This is the second paragraph.</p>
+```
+
+- HTML P Element: Here's The Code To Identify Paragraph Text »Code Example. 
+
+Here's how to define a paragraph in HTML.
+Here's how to define a paragraph in HTML. Basic Text Formatting. If you'HTML.com
+- What is the ` ` Tag? Importance and Multiple Uses in HTMLWhat is HTML 
+
+tag? The HTML 
+
+tag is a fundamental element used for creating paragraphs in web development. It helps structure co...Lenovo
+- What's the difference between 
+
+and 
+? - Quora* In HTML, the idea is that bits of text are marked up with tags. * These tags are used by browsers to work out how to show the te...Quora
+- HTML Paragraphs - W3Schools❮ Previous Next ❯ A paragraph always starts on a new line, and is usually a block of text. HTML Paragraphs. The HTML 
+
+element def...W3Schools
+- Using versus versus CSS for form fields, what is the ...Comments. Add a comment. 0. The p-tag stands for paragraph. And content in one paragraph should always be independent from that in...Stack Overflow
+- What is "
+
+" in HTML? - Stack Overflow3. Its just a p tag with an attribute a . tkausl. – tkausl. 2023-09-09 19:51:46 +00:00. Commented Sep 9, 2023 at 19:51. 1 Answer. ...Stack Overflow
+- HTML elements reference - MDN Web Docs- Represents an item in a list. It must be contained in a parent element: an ordered list ( 
+   
+   ), an unordered list ( 
+      ...MDN Web Docs
+- Paragraph in HTML: Syntax, Formatting & ExamplesIntroduction A paragraph in HTML is a block of text enclosed within the 
+
+tag. It always begins on a new line, and the browser add...WsCube Tech
+- HTML Tutorial: Basic Tags: Whitespace & ParagraphsThe 
+
+tag is a container tag that indicates that the text inside it represents a paragraph of text. Most browsers display a paragr...ict4me.sri.com
+
+
+## Related links
+
+
+# Add Lorem Ipsum Text in HTML in VS Code
+
+
+### Add Lorem Ipsum Text in HTML in VS Code - YouTube
+
+
+### <input> HTML input element - HTML - MDN Web Docs - Mozilla
+
+- HTML Doctype Tag.
+- HTML Anchor Tag.
+- HTML Address Tag. This tag is used to define the contact information for the author or owner of a. ...
+- HTML Article Tag. ...
+- HTML Aside Tag. ...
+- HTML Bold Tag.
+- HTML BlockQuote Tag.
+- HTML Body Tag.
+
+
+### 50 HTML Tags and their functions with Examples PDF - Scribd
+
+
+## Web results
+
+
+### HTML Number Input Generator Online
+
+
+### dummy - HTML
+
+
+### SESSION 7 - Create a Javascript FAKE BOT for HTML CSS ...
+
+
+# SESSION 7 - Create a Javascript FAKE BOT for HTML CSS ...
+
+
+### Dummy HTML snippets for webdesigners
+
+
+### HTML Text Generator
+
+
+### Generate HTML/CSS/JavaScript Code from a simple text ...
+
+
+### <input type="hidden"> HTML attribute value - MDN Web Docs
+
+
+# Page navigation
+
+
+# Footer links
