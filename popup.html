@@ -3,7 +3,10 @@
   <head>
     <style>
       body {
-        font-family: system-ui, -apple-system, sans-serif;
+        font-family:
+          system-ui,
+          -apple-system,
+          sans-serif;
         width: 250px;
         padding: 16px;
         color: #333;
@@ -23,7 +26,8 @@
         gap: 8px;
         margin-bottom: 0;
       }
-      input[type="number"], textarea {
+      input[type="number"],
+      textarea {
         width: 100%;
         padding: 8px;
         box-sizing: border-box;
@@ -43,9 +47,21 @@
         border-radius: 4px;
         cursor: pointer;
         font-weight: bold;
+        margin-bottom: 8px;
       }
       button:hover {
         background-color: #004494;
+      }
+      .btn-success {
+        background-color: #198754;
+      }
+      .btn-success:hover {
+        background-color: #157347;
+      }
+      hr {
+        border: 0;
+        border-top: 1px solid #eaeaea;
+        margin: 16px 0;
       }
     </style>
   </head>
@@ -63,11 +79,21 @@
     </div>
 
     <div class="row">
-      <label for="blockedSites">Blokir Situs (pisahkan dengan koma atau baris baru)</label>
-      <textarea id="blockedSites" rows="4" placeholder="facebook.com&#10;twitter.com"></textarea>
+      <label for="blockedSites"
+        >Blokir Situs (pisahkan dengan koma atau baris baru)</label
+      >
+      <textarea
+        id="blockedSites"
+        rows="4"
+        placeholder="facebook.com&#10;twitter.com"
+      ></textarea>
     </div>
 
     <button id="saveBtn">Simpan Pengaturan</button>
+
+    <hr />
+
+    <button id="saveMdBtn" class="btn-success">Simpan Blog ke .md</button>
 
     <script src="popup.js"></script>
   </body>
