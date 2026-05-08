@@ -1,8 +1,10 @@
 import { initFocusModeUI } from "../../features/focus-mode/popup-ui.js";
 import { initDomExtractorUI } from "../../features/dom-extractor/parser.js";
+import { initDarkModeUI } from "../../features/dark-mode/popup-ui.js";
 
 document.addEventListener("DOMContentLoaded", async () => {
   await initFocusModeUI();
+  await initDarkModeUI();
   initDomExtractorUI();
 
   const openDashboardBtn = document.getElementById("openDashboardBtn");
