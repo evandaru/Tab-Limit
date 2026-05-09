@@ -41,6 +41,7 @@ The content is organized as follows:
 
 <directory_structure>
 assets/
+  chat.png
   icon-16.png
 src/
   entrypoints/
@@ -53,6 +54,10 @@ src/
       index.html
       index.js
   features/
+    dark-mode/
+      background.js
+      engine.js
+      popup-ui.js
     dom-extractor/
       parser.js
     fake-filler/
@@ -60,11 +65,26 @@ src/
     focus-mode/
       background.js
       popup-ui.js
+    link-cleaner/
+      background.js
+      popup-ui.js
+    link-extractor/
+      engine.js
+    pomodoro/
+      background.js
+      dashboard-ui.js
+      engine.js
+      popup-ui.js
     quotes-manager/
       context-menu.js
       dashboard-ui.js
+    responsive-tester/
+      ui.js
     time-tracker/
       analytics-ui.js
+      engine.js
+    video-speed/
+      background.js
       engine.js
   shared/
     api/
@@ -79,333 +99,828 @@ manifest.json
 <files>
 This section contains the contents of the repository's files.
 
-<file path="src/entrypoints/background/index.js">
-import { initFocusMode } from "../../features/focus-mode/background.js";
-import { initTimeTracker } from "../../features/time-tracker/engine.js";
-import { initContextMenus } from "../../features/quotes-manager/context-menu.js";
+<file path="src/features/link-cleaner/background.js">
+/**
+ * Link Cleaner Engine (URL Sanitizer)
+ * Berjalan di background sebagai interceptor untuk membersihkan tracking parameters.
+ */
 
-function bootstrapServices() {
-  console.log("Initializing Service Worker...");
-  
-  initFocusMode();
-  initTimeTracker();
-  initContextMenus();
+let state = { enabled: false };
+
+// Menggunakan Set untuk optimasi pencarian O(1)
+const EXACT_TRACKERS = new Set([
+    'fbclid', 'gclid', 'igshid', 'ref', '_ga',
+    'mc_cid', 'mc_eid', 'yclid', '_ke', 'mkt_tok'
+]);
+
+// Untuk mendeteksi varian parameter dengan prefix (seperti utm_source, utm_medium, dll)
+const PREFIX_TRACKERS = ['utm_'];
+
+export function initLinkCleaner() {
+    // 1. Inisialisasi State
+    chrome.storage.sync.get(['cleanerEnabled'], (data) => {
+        state.enabled = data.cleanerEnabled ?? false;
+    });
+
+    // 2. Reactivity pada konfigurasi user
+    chrome.storage.onChanged.addListener((changes, namespace) => {
+        if (namespace === 'sync' && changes.cleanerEnabled) {
+            state.enabled = changes.cleanerEnabled.newValue;
+        }
+    });
+
+    // 3. Interceptor Pipeline
+    chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+        // Hanya memproses saat URL berubah dan state aktif
+        if (!state.enabled || !changeInfo.url) return;
+
+        try {
+            const urlObj = new URL(changeInfo.url);
+            const searchParams = urlObj.searchParams;
+            const keysToDelete = [];
+
+            // Kumpulkan kunci parameter yang cocok dengan kriteria tracker
+            for (const key of searchParams.keys()) {
+                const lowerKey = key.toLowerCase();
+
+                const isExactMatch = EXACT_TRACKERS.has(lowerKey);
+                const isPrefixMatch = PREFIX_TRACKERS.some(prefix => lowerKey.startsWith(prefix));
+
+                if (isExactMatch || isPrefixMatch) {
+                    keysToDelete.push(key);
+                }
+            }
+
+            // Jika ditemukan parameter kotor, lakukan mutasi URI dan redirect
+            if (keysToDelete.length > 0) {
+                keysToDelete.forEach(key => searchParams.delete(key));
+
+                const cleanUrl = urlObj.toString();
+
+                // Update URL di tab aktif untuk mencegah eksekusi tracker di sisi klien
+                chrome.tabs.update(tabId, { url: cleanUrl });
+            }
+        } catch (e) {
+            // Catch error secara silent (misal: invalid internal browser protocol)
+        }
+    });
+}
+</file>
+
+<file path="src/features/link-cleaner/popup-ui.js">
+export async function initLinkCleanerUI() {
+    const cleanerEnabledEl = document.getElementById("cleanerEnabled");
+    const saveBtn = document.getElementById("saveBtn");
+
+    if (!cleanerEnabledEl || !saveBtn) return;
+
+    const data = await chrome.storage.sync.get(["cleanerEnabled"]);
+    cleanerEnabledEl.checked = data.cleanerEnabled ?? false;
+
+    // Binding ke tombol simpan yang sudah eksis di arsitektur Anda
+    saveBtn.addEventListener("click", async () => {
+        await chrome.storage.sync.set({
+            cleanerEnabled: cleanerEnabledEl.checked,
+        });
+    });
+}
+</file>
+
+<file path="src/features/pomodoro/background.js">
+import { applyPomodoroOverlay } from "./engine.js";
+
+let pomoState = { active: false, type: 'work', timeLeft: 1500 };
+
+export function initPomodoro() {
+    // 1. Listener untuk menghitung mundur timer
+    chrome.alarms.onAlarm.addListener((alarm) => {
+        if (alarm.name === 'pomoTimer') {
+            tick();
+        }
+    });
+
+    // 2. Listener INJEKSI UI: Di sinilah kode tersebut ditaruh!
+    // Setiap kali user membuka tab baru atau me-refresh halaman,
+    // ekstensi akan otomatis menyuntikkan engine UI Pomodoro.
+    chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+        if (changeInfo.status === "loading" && tab.url && tab.url.startsWith("http")) {
+            chrome.scripting.executeScript({
+                target: { tabId },
+                func: applyPomodoroOverlay
+            }).catch((err) => {
+                // Abaikan error jika ekstensi dilarang berjalan di halaman tertentu (seperti chrome://)
+                console.warn("[Devkita Pomodoro] Gagal injeksi UI di:", tab.url);
+            });
+        }
+    });
 }
 
-bootstrapServices();
+function tick() {
+    chrome.storage.local.get(['pomoTimeLeft', 'pomoType', 'pomoActive'], (data) => {
+        if (!data.pomoActive) return;
+
+        let time = data.pomoTimeLeft - 1;
+        if (time <= 0) {
+            // Switch cycle (Kerja -> Istirahat, atau sebaliknya)
+            const nextType = data.pomoType === 'work' ? 'break' : 'work';
+            const nextTime = nextType === 'work' ? 1500 : 300; // 25 menit kerja, 5 menit istirahat
+
+            chrome.storage.local.set({
+                pomoTimeLeft: nextTime,
+                pomoType: nextType,
+                pomoText: nextType === 'work' ? "Semangat kerjanya!" : "Waktunya istirahat~"
+            });
+
+            chrome.notifications.create({
+                type: 'basic',
+                iconUrl: '/assets/icon-16.png', // Pastikan path icon ini benar
+                title: 'Pomodoro Devkita',
+                message: `Sesi ${data.pomoType} selesai!`
+            });
+        } else {
+            chrome.storage.local.set({ pomoTimeLeft: time });
+        }
+    });
+}
+
+export async function togglePomodoro(active) {
+    if (active) {
+        await chrome.storage.local.set({
+            pomoActive: true,
+            pomoEnabled: true,
+            pomoTimeLeft: 1500,
+            pomoType: 'work',
+            pomoText: "Ayo fokus!"
+        });
+        chrome.alarms.create('pomoTimer', { periodInMinutes: 1 / 60 }); // Alarm berdetak setiap 1 detik
+    } else {
+        await chrome.storage.local.set({ pomoActive: false, pomoEnabled: false });
+        chrome.alarms.clear('pomoTimer');
+    }
+}
+
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message.action === 'togglePomodoro') {
+        togglePomodoro(message.active).then(() => {
+            sendResponse({ success: true });
+        });
+        return true; // Keep message channel open for async response
+    }
+});
+</file>
+
+<file path="src/features/pomodoro/dashboard-ui.js">
+export function initPomodoroDashboard() {
+    const uploadInput = document.getElementById('pomoCharUpload');
+    const sizeSlider = document.getElementById('pomoSizeSlider');
+    const textInput = document.getElementById('pomoDefaultText');
+    const previewImg = document.getElementById('pomoPreviewImg');
+    const previewText = document.getElementById('pomoPreviewText');
+    const saveBtn = document.getElementById('savePomoBtn');
+
+    if (!uploadInput || !saveBtn) return;
+
+    let currentBase64 = null;
+
+    // Sinkronisasi Live Preview Teks
+    const updateLivePreview = () => {
+        const text = textInput.value || "mangat2";
+        previewText.innerHTML = `${text}<br>kurang 25:00`;
+        previewImg.style.width = `${sizeSlider.value}px`;
+    };
+
+    textInput.addEventListener('input', updateLivePreview);
+    sizeSlider.addEventListener('input', updateLivePreview);
+
+    // Handler Upload Gambar
+    uploadInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = () => {
+            currentBase64 = reader.result;
+            previewImg.src = currentBase64;
+            previewImg.style.display = "block"; // Pastikan muncul
+            console.log("Gambar berhasil dikonversi ke Base64");
+        };
+        reader.onerror = () => {
+            alert("Gagal membaca file gambar.");
+        };
+        reader.readAsDataURL(file);
+    });
+
+    // Load Data dari Storage
+    chrome.storage.local.get(['pomoImage', 'pomoSize', 'pomoDefaultText'], (data) => {
+        if (data.pomoImage) {
+            currentBase64 = data.pomoImage;
+            previewImg.src = data.pomoImage;
+        }
+        if (data.pomoSize) sizeSlider.value = data.pomoSize;
+        if (data.pomoDefaultText) textInput.value = data.pomoDefaultText;
+        updateLivePreview();
+    });
+
+    // Handler Simpan
+    saveBtn.addEventListener('click', async () => {
+        const settings = {
+            pomoSize: parseInt(sizeSlider.value),
+            pomoDefaultText: textInput.value || "mangat2",
+            pomoText: textInput.value || "mangat2"
+        };
+
+        if (currentBase64) {
+            settings.pomoImage = currentBase64;
+        }
+
+        await chrome.storage.local.set(settings);
+        alert("✅ Pengaturan berhasil disimpan!");
+    });
+}
+</file>
+
+<file path="src/features/pomodoro/engine.js">
+/**
+ * Pomodoro Visual Engine
+ * Menangani rendering karakter dan gelembung chat 8-Bit.
+ */
+export function applyPomodoroOverlay() {
+    if (window.__DEVKITA_POMO_ENGINE) return;
+    window.__DEVKITA_POMO_ENGINE = true;
+
+    const container = document.createElement('div');
+    container.id = 'devkita-pomo-container';
+    container.style.cssText = `
+    position: fixed; bottom: 20px; right: 20px;
+    z-index: 2147483647; display: flex; flex-direction: column;
+    align-items: center; pointer-events: none; transition: all 0.3s ease;
+  `;
+
+    // 8-Bit Bubble Chat (Pure CSS)
+    const bubble = document.createElement('div');
+    bubble.style.cssText = `
+    position: relative; background: white; padding: 10px 15px;
+    border: 4px solid black; margin-bottom: 12px;
+    font-family: 'Courier New', Courier, monospace; font-weight: bold;
+    font-size: 14px; color: black; box-shadow: 4px 4px 0px rgba(0,0,0,0.2);
+    max-width: 250px; word-wrap: break-word; text-align: center;
+    opacity: 0; transform: translateY(10px); transition: all 0.3s ease;
+    line-height: 1.4;
+  `;
+
+    const textNode = document.createElement('span');
+    bubble.appendChild(textNode);
+
+    // Ekor Bubble
+    const tail = document.createElement('div');
+    tail.style.cssText = `
+    position: absolute; bottom: -12px; right: 20px;
+    width: 8px; height: 8px; background: white;
+    border-left: 4px solid black; border-right: 4px solid black;
+    box-shadow: 0 4px 0 black;
+  `;
+    bubble.appendChild(tail);
+
+    // Karakter
+    const character = document.createElement('img');
+    character.style.cssText = `object-fit: contain; transition: width 0.2s ease;`;
+
+    container.appendChild(bubble);
+    container.appendChild(character);
+    document.documentElement.appendChild(container);
+
+    // Fungsi Sinkronisasi Visual
+    const updateVisuals = () => {
+        chrome.storage.local.get(['pomoEnabled', 'pomoImage', 'pomoSize', 'pomoText', 'pomoTimeLeft'], (data) => {
+            if (!data.pomoEnabled) {
+                container.style.display = 'none';
+                return;
+            }
+
+            container.style.display = 'flex';
+
+            if (data.pomoImage) {
+                character.src = data.pomoImage;
+            }
+            character.style.width = `${data.pomoSize || 120}px`;
+
+            // Kalkulasi Waktu (Format MM:SS)
+            const timeLeft = data.pomoTimeLeft || 0;
+            const minutes = Math.floor(timeLeft / 60).toString().padStart(2, '0');
+            const seconds = (timeLeft % 60).toString().padStart(2, '0');
+
+            const customText = data.pomoText || "mangat2";
+
+            // Merender Teks Custom + Waktu Mundur
+            textNode.innerHTML = `${customText}<br>kurang ${minutes}:${seconds}`;
+
+            bubble.style.opacity = '1';
+            bubble.style.transform = 'translateY(0)';
+        });
+    };
+
+    updateVisuals();
+
+    // Karena background.js (tick()) selalu memperbarui `pomoTimeLeft` setiap 1 detik,
+    // listener ini akan ter-trigger setiap detik dan mengubah waktu di Bubble.
+    chrome.storage.onChanged.addListener(updateVisuals);
+}
+</file>
+
+<file path="src/features/pomodoro/popup-ui.js">
+export function initPomodoroPopupUI() {
+    const pomoStatus = document.getElementById("pomoStatus");
+    const pomoTimer = document.getElementById("pomoTimer");
+    const startPomoBtn = document.getElementById("startPomoBtn");
+    const stopPomoBtn = document.getElementById("stopPomoBtn");
+
+    if (!pomoStatus || !pomoTimer) return;
+
+    // Format detik ke MM:SS
+    const formatTimeLeft = (seconds) => {
+        const m = Math.floor(seconds / 60).toString().padStart(2, '0');
+        const s = (seconds % 60).toString().padStart(2, '0');
+        return `${m}:${s}`;
+    };
+
+    const updateUI = () => {
+        chrome.storage.local.get(['pomoActive', 'pomoType', 'pomoTimeLeft'], (data) => {
+            if (data.pomoActive) {
+                pomoStatus.innerText = data.pomoType === 'work' ? '🔥 Sedang Fokus' : '☕ Waktu Istirahat';
+                pomoStatus.style.color = data.pomoType === 'work' ? '#dc3545' : '#198754';
+                pomoTimer.innerText = formatTimeLeft(data.pomoTimeLeft);
+
+                startPomoBtn.style.display = 'none';
+                stopPomoBtn.style.display = 'block';
+            } else {
+                pomoStatus.innerText = '💤 Pomodoro Nonaktif';
+                pomoStatus.style.color = '#333';
+                pomoTimer.innerText = '25:00';
+
+                startPomoBtn.style.display = 'block';
+                stopPomoBtn.style.display = 'none';
+            }
+        });
+    };
+
+    // Kirim sinyal START ke background
+    startPomoBtn.addEventListener('click', () => {
+        chrome.runtime.sendMessage({ action: 'togglePomodoro', active: true }, () => {
+            updateUI();
+        });
+    });
+
+    // Kirim sinyal STOP ke background
+    stopPomoBtn.addEventListener('click', () => {
+        chrome.runtime.sendMessage({ action: 'togglePomodoro', active: false }, () => {
+            updateUI();
+        });
+    });
+
+    // Polling UI setiap detik agar angka jam di popup ikut mundur secara real-time
+    setInterval(updateUI, 1000);
+    updateUI();
+}
+</file>
+
+<file path="src/features/responsive-tester/ui.js">
+/**
+ * Responsive Tester Module
+ * Membuka URL tab aktif di jendela baru dengan dimensi perangkat standar industri.
+ */
+
+const DEVICE_CONFIGS = {
+    mobile: { width: 375, height: 812, type: 'popup' },   // iPhone X/12/13/14 Pro viewport
+    tablet: { width: 768, height: 1024, type: 'popup' },  // iPad Standard viewport
+    desktop: { width: 1440, height: 900, type: 'popup' }  // Standard Desktop viewport
+};
+
+export function initResponsiveTesterUI() {
+    const container = document.getElementById("responsiveTesterContainer");
+    if (!container) return;
+
+    // Menggunakan Event Delegation untuk performa yang lebih baik
+    container.addEventListener("click", async (event) => {
+        const btn = event.target.closest("button[data-device]");
+        if (!btn) return;
+
+        const deviceType = btn.dataset.device;
+        const config = DEVICE_CONFIGS[deviceType];
+
+        if (!config) return;
+
+        try {
+            const originalText = btn.innerText;
+            btn.innerText = "⏳";
+            btn.disabled = true;
+
+            // Ambil metadata tab yang sedang aktif
+            const [activeTab] = await chrome.tabs.query({
+                active: true,
+                currentWindow: true
+            });
+
+            // Validasi protokol URL untuk mencegah eksekusi di halaman internal browser
+            if (!activeTab || !activeTab.url || activeTab.url.startsWith("chrome://")) {
+                throw new Error("Invalid protocol for responsive testing.");
+            }
+
+            // Eksekusi window baru dengan dimensi presisi
+            await chrome.windows.create({
+                url: activeTab.url,
+                width: config.width,
+                height: config.height,
+                type: config.type,
+                focused: true
+            });
+
+            // Kembalikan state UI
+            btn.innerText = originalText;
+            btn.disabled = false;
+
+        } catch (error) {
+            console.error("[Responsive Tester] Operation failed:", error);
+            const originalText = btn.innerText;
+            btn.innerText = "❌ Gagal";
+            setTimeout(() => {
+                btn.innerText = originalText;
+                btn.disabled = false;
+            }, 1500);
+        }
+    });
+}
 </file>
 
 <file path="src/entrypoints/options/index.html">
 <!doctype html>
 <html lang="id">
-  <head>
-    <meta charset="UTF-8" />
-    <title>Dashboard | Fokus & Clipboard</title>
-    <style>
-      /* ==========================================
+
+<head>
+  <meta charset="UTF-8" />
+  <title>Dashboard | Fokus & Clipboard</title>
+  <style>
+    /* ==========================================
          SISTEM TEMA: CSS CUSTOM PROPERTIES
          ========================================== */
+    :root {
+      --bg-body: #f8fafc;
+      --bg-card: #ffffff;
+      --text-main: #334155;
+      --text-muted: #64748b;
+      --border-color: #e2e8f0;
+      --primary: #3b82f6;
+      --primary-hover: #2563eb;
+      --danger: #ef4444;
+      --danger-hover: #dc2626;
+      --card-shadow:
+        0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+    }
+
+    /* Injeksi Tema Gelap (Otomatis mendeteksi sistem OS pengguna) */
+    @media (prefers-color-scheme: dark) {
       :root {
-        --bg-body: #f8fafc;
-        --bg-card: #ffffff;
-        --text-main: #334155;
-        --text-muted: #64748b;
-        --border-color: #e2e8f0;
-        --primary: #3b82f6;
-        --primary-hover: #2563eb;
-        --danger: #ef4444;
-        --danger-hover: #dc2626;
-        --card-shadow:
-          0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+        --bg-body: #0f172a;
+        --bg-card: #1e293b;
+        --text-main: #f8fafc;
+        --text-muted: #94a3b8;
+        --border-color: #334155;
+        --primary: #60a5fa;
+        --primary-hover: #3b82f6;
+        --danger: #f87171;
+        --danger-hover: #ef4444;
+        --card-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5);
       }
+    }
 
-      /* Injeksi Tema Gelap (Otomatis mendeteksi sistem OS pengguna) */
-      @media (prefers-color-scheme: dark) {
-        :root {
-          --bg-body: #0f172a;
-          --bg-card: #1e293b;
-          --text-main: #f8fafc;
-          --text-muted: #94a3b8;
-          --border-color: #334155;
-          --primary: #60a5fa;
-          --primary-hover: #3b82f6;
-          --danger: #f87171;
-          --danger-hover: #ef4444;
-          --card-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5);
-        }
-      }
-
-      /* ==========================================
+    /* ==========================================
          GLOBAL STYLES & LAYOUTING
          ========================================== */
-      body {
-        font-family:
-          system-ui,
-          -apple-system,
-          sans-serif;
-        background-color: var(--bg-body);
-        color: var(--text-main);
-        margin: 0;
-        padding: 30px;
-        line-height: 1.6;
-        transition:
-          background-color 0.3s ease,
-          color 0.3s ease;
-      }
+    body {
+      font-family:
+        system-ui,
+        -apple-system,
+        sans-serif;
+      background-color: var(--bg-body);
+      color: var(--text-main);
+      margin: 0;
+      padding: 30px;
+      line-height: 1.6;
+      transition:
+        background-color 0.3s ease,
+        color 0.3s ease;
+    }
 
-      .container {
-        max-width: 800px;
-        margin: 0 auto;
-      }
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+    }
 
-      .header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        border-bottom: 1px solid var(--border-color);
-        padding-bottom: 15px;
-        margin-bottom: 25px;
-      }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 15px;
+      margin-bottom: 25px;
+    }
 
-      h1 {
-        margin: 0;
-        font-size: 1.8rem;
-        color: var(--text-main);
-      }
-      h3 {
-        color: var(--text-main);
-        margin-top: 0;
-        border-bottom: 1px solid var(--border-color);
-        padding-bottom: 10px;
-      }
+    h1 {
+      margin: 0;
+      font-size: 1.8rem;
+      color: var(--text-main);
+    }
 
-      /* ==========================================
+    h3 {
+      color: var(--text-main);
+      margin-top: 0;
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 10px;
+    }
+
+    /* ==========================================
          BUTTON COMPONENTS
          ========================================== */
-      button {
-        padding: 8px 16px;
-        font-size: 13px;
-        font-weight: 600;
-        cursor: pointer;
-        border: none;
-        border-radius: 8px; /* Lebih ramah/membulat */
-        background-color: var(--primary);
-        color: #ffffff;
-        margin-left: 8px;
-        transition:
-          background-color 0.2s,
-          transform 0.1s;
-      }
-      button:hover {
-        background-color: var(--primary-hover);
-      }
-      button:active {
-        transform: scale(0.98);
-      }
+    button {
+      padding: 8px 16px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      border-radius: 8px;
+      /* Lebih ramah/membulat */
+      background-color: var(--primary);
+      color: #ffffff;
+      margin-left: 8px;
+      transition:
+        background-color 0.2s,
+        transform 0.1s;
+    }
 
-      #clearBtn {
-        background-color: var(--danger);
-      }
-      #clearBtn:hover {
-        background-color: var(--danger-hover);
-      }
+    button:hover {
+      background-color: var(--primary-hover);
+    }
 
-      /* Tombol khusus untuk fitur "See More" */
-      button.btn-toggle-text {
-        background: none;
-        color: var(--primary);
-        padding: 0;
-        margin: 8px 0 0 0;
-        font-size: 13px;
-        border-radius: 0;
-      }
-      button.btn-toggle-text:hover {
-        background: none;
-        text-decoration: underline;
-      }
+    button:active {
+      transform: scale(0.98);
+    }
 
-      /* ==========================================
+    #clearBtn {
+      background-color: var(--danger);
+    }
+
+    #clearBtn:hover {
+      background-color: var(--danger-hover);
+    }
+
+    /* Tombol khusus untuk fitur "See More" */
+    button.btn-toggle-text {
+      background: none;
+      color: var(--primary);
+      padding: 0;
+      margin: 8px 0 0 0;
+      font-size: 13px;
+      border-radius: 0;
+    }
+
+    button.btn-toggle-text:hover {
+      background: none;
+      text-decoration: underline;
+    }
+
+    /* ==========================================
          DATA CARDS & GRIDS
          ========================================== */
-      .dashboard-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-        gap: 15px;
-        margin-bottom: 25px;
-      }
+    .dashboard-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 15px;
+      margin-bottom: 25px;
+    }
 
-      .stat-card,
-      .domain-list-container {
-        background: var(--bg-card);
-        border: 1px solid var(--border-color);
-        border-radius: 12px;
-        padding: 20px;
-        box-shadow: var(--card-shadow);
-        transition:
-          background-color 0.3s,
-          border-color 0.3s;
-      }
+    .stat-card,
+    .domain-list-container {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: var(--card-shadow);
+      transition:
+        background-color 0.3s,
+        border-color 0.3s;
+    }
 
-      .stat-label {
-        font-size: 12px;
-        color: var(--text-muted);
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        margin-bottom: 5px;
-        font-weight: 600;
-      }
-      .stat-value {
-        font-size: 1.8rem;
-        font-weight: 700;
-        color: var(--primary);
-      }
-      .stat-value.danger {
-        color: var(--danger);
-      }
+    .stat-label {
+      font-size: 12px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 5px;
+      font-weight: 600;
+    }
 
-      .ranking-list {
-        list-style: none;
-        padding: 0;
-        margin: 0;
-        max-height: 250px;
-        overflow-y: auto;
-      }
-      .ranking-item {
-        display: flex;
-        justify-content: space-between;
-        padding: 12px 0;
-        border-bottom: 1px dashed var(--border-color);
-        font-size: 14px;
-      }
-      .ranking-item:last-child {
-        border-bottom: none;
-      }
-      .domain-name {
-        font-weight: 500;
-        color: var(--text-main);
-      }
-      .domain-time {
-        color: var(--text-muted);
-        font-variant-numeric: tabular-nums;
-        font-family: monospace;
-      }
+    .stat-value {
+      font-size: 1.8rem;
+      font-weight: 700;
+      color: var(--primary);
+    }
 
-      /* ==========================================
+    .stat-value.danger {
+      color: var(--danger);
+    }
+
+    .ranking-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      max-height: 250px;
+      overflow-y: auto;
+    }
+
+    .ranking-item {
+      display: flex;
+      justify-content: space-between;
+      padding: 12px 0;
+      border-bottom: 1px dashed var(--border-color);
+      font-size: 14px;
+    }
+
+    .ranking-item:last-child {
+      border-bottom: none;
+    }
+
+    .domain-name {
+      font-weight: 500;
+      color: var(--text-main);
+    }
+
+    .domain-time {
+      color: var(--text-muted);
+      font-variant-numeric: tabular-nums;
+      font-family: monospace;
+    }
+
+    /* ==========================================
          QUOTES LIST COMPONENT
          ========================================== */
-      .quote-card {
-        border-left: 4px solid var(--primary);
-        padding: 16px;
-        margin-bottom: 16px;
-        background: var(--bg-card);
-        border-radius: 0 12px 12px 0;
-        box-shadow: var(--card-shadow);
-        border-top: 1px solid var(--border-color);
-        border-right: 1px solid var(--border-color);
-        border-bottom: 1px solid var(--border-color);
-      }
+    .quote-card {
+      border-left: 4px solid var(--primary);
+      padding: 16px;
+      margin-bottom: 16px;
+      background: var(--bg-card);
+      border-radius: 0 12px 12px 0;
+      box-shadow: var(--card-shadow);
+      border-top: 1px solid var(--border-color);
+      border-right: 1px solid var(--border-color);
+      border-bottom: 1px solid var(--border-color);
+    }
 
-      .quote-text-wrapper {
-        margin-bottom: 12px;
-      }
+    .quote-text-wrapper {
+      margin-bottom: 12px;
+    }
 
-      .quote-text {
-        font-size: 15px;
-        font-family: monospace; /* Cocok untuk snippet kode */
-        color: var(--text-main);
-        white-space: pre-wrap; /* Mempertahankan format baris kode */
-        word-break: break-word;
-      }
+    .quote-text {
+      font-size: 15px;
+      font-family: monospace;
+      /* Cocok untuk snippet kode */
+      color: var(--text-main);
+      white-space: pre-wrap;
+      /* Mempertahankan format baris kode */
+      word-break: break-word;
+    }
 
-      /* Utility class untuk pemotongan teks via CSS */
-      .quote-text.clamped {
-        display: -webkit-box;
-        -webkit-line-clamp: 4; /* Maksimal 4 baris yang ditampilkan */
-        -webkit-box-orient: vertical;
-        overflow: hidden;
-      }
+    /* Utility class untuk pemotongan teks via CSS */
+    .quote-text.clamped {
+      display: -webkit-box;
+      -webkit-line-clamp: 4;
+      /* Maksimal 4 baris yang ditampilkan */
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
 
-      .meta {
-        font-size: 12px;
-        color: var(--text-muted);
-        padding-top: 8px;
-        border-top: 1px dashed var(--border-color);
-      }
-      .meta a {
-        color: var(--primary);
-        text-decoration: none;
-        word-break: break-all;
-      }
-      .meta a:hover {
-        text-decoration: underline;
-      }
+    .meta {
+      font-size: 12px;
+      color: var(--text-muted);
+      padding-top: 8px;
+      border-top: 1px dashed var(--border-color);
+    }
 
-      .empty-state {
-        text-align: center;
-        padding: 40px;
-        border: 2px dashed var(--border-color);
-        color: var(--text-muted);
-        border-radius: 12px;
-      }
-    </style>
-  </head>
-  <body>
-    <div class="container">
-      <div class="header">
-        <h1>Dashboard Analitik</h1>
-        <div class="actions">
-          <button id="clearBtn">Clear Data</button>
-          <button id="exportBtn">Export .md</button>
-          <button id="copyMdBtn">Copy to Clipboard</button>
+    .meta a {
+      color: var(--primary);
+      text-decoration: none;
+      word-break: break-all;
+    }
+
+    .meta a:hover {
+      text-decoration: underline;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 40px;
+      border: 2px dashed var(--border-color);
+      color: var(--text-muted);
+      border-radius: 12px;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <div class="stat-card" style="margin-bottom: 25px;">
+      <h3>Setting Pomodoro Character</h3>
+      <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+        <div style="flex: 1; min-width: 300px; display: flex; flex-direction: column; gap: 15px;">
+          <div>
+            <label class="stat-label">Upload Karakter (PNG/GIF)</label><br>
+            <input type="file" id="pomoCharUpload" accept="image/*" style="margin-top: 8px;">
+          </div>
+          <div>
+            <label class="stat-label">Ukuran Karakter</label>
+            <input type="range" id="pomoSizeSlider" min="50" max="300" value="120" style="width: 100%;">
+          </div>
+          <div>
+            <label class="stat-label">Pesan Motivasi Default</label>
+            <input type="text" id="pomoDefaultText" placeholder="Contoh: mangat2"
+              style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--border-color); box-sizing: border-box; font-family: monospace;">
+          </div>
+          <div style="text-align: right; margin-top: auto;">
+            <button id="savePomoBtn" style="background-color: var(--primary); padding: 10px 25px;">
+              💾 Simpan Pengaturan
+            </button>
+          </div>
         </div>
-      </div>
-
-      <div class="dashboard-grid">
-        <div class="stat-card">
-          <div class="stat-label">Waktu Internet (Hari Ini)</div>
-          <div class="stat-value" id="statTodayTime">0j 0m</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">Total Pemakaian</div>
-          <div class="stat-value" id="statAllTime">0j 0m</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">Upaya Distraksi</div>
-          <div class="stat-value danger" id="statDistractions">0</div>
-        </div>
-      </div>
-
-      <div class="domain-list-container">
-        <h3>Alokasi Domain</h3>
-        <ul id="domainRanking" class="ranking-list"></ul>
-      </div>
-
-      <div class="quotes-section">
-        <h3>Kutipan & Snippet Kode</h3>
-        <div id="quoteList"></div>
 
         <div
-          id="seeMoreQuotesContainer"
-          style="text-align: center; margin-top: 20px; display: none"
-        >
-          <button
-            id="btnSeeAllQuotes"
-            style="
+          style="flex: 1; min-width: 300px; background: var(--bg-body); border: 2px dashed var(--border-color); border-radius: 12px; position: relative; min-height: 250px; display: flex; align-items: flex-end; justify-content: flex-end; padding: 30px; overflow: hidden;">
+          <div
+            style="position: absolute; top: 15px; left: 15px; font-size: 12px; color: var(--text-muted); font-weight: bold; letter-spacing: 1px;">
+            🔴 LIVE PREVIEW</div>
+
+          <div style="display: flex; flex-direction: column; align-items: center;">
+            <div
+              style="position: relative; background: white; padding: 10px 15px; border: 4px solid black; margin-bottom: 12px; font-family: 'Courier New', Courier, monospace; font-weight: bold; font-size: 14px; color: black; box-shadow: 4px 4px 0px rgba(0,0,0,0.2); max-width: 200px; word-wrap: break-word; text-align: center;">
+              <span id="pomoPreviewText" style="line-height: 1.4;">mangat2<br>kurang 25:00</span>
+              <div
+                style="position: absolute; bottom: -12px; right: 20px; width: 8px; height: 8px; background: white; border-left: 4px solid black; border-right: 4px solid black; box-shadow: 0 4px 0 black;">
+              </div>
+            </div>
+            <img id="pomoPreviewImg"
+              style="display: block; object-fit: contain; width: 120px; min-height: 50px; transition: width 0.2s ease;"
+              alt="Preview Karakter">
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="header">
+      <h1>Dashboard Analitik</h1>
+      <div class="actions">
+        <button id="clearBtn">Clear Data</button>
+        <button id="exportBtn">Export .md</button>
+        <button id="copyMdBtn">Copy to Clipboard</button>
+      </div>
+    </div>
+
+    <div class="dashboard-grid">
+      <div class="stat-card">
+        <div class="stat-label">Waktu Internet (Hari Ini)</div>
+        <div class="stat-value" id="statTodayTime">0j 0m</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Total Pemakaian</div>
+        <div class="stat-value" id="statAllTime">0j 0m</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Upaya Distraksi</div>
+        <div class="stat-value danger" id="statDistractions">0</div>
+      </div>
+    </div>
+
+    <div class="domain-list-container">
+      <h3>Alokasi Domain</h3>
+      <ul id="domainRanking" class="ranking-list"></ul>
+    </div>
+
+    <div class="quotes-section">
+      <h3>Kutipan & Snippet Kode</h3>
+      <div id="quoteList"></div>
+
+      <div id="seeMoreQuotesContainer" style="text-align: center; margin-top: 20px; display: none">
+        <button id="btnSeeAllQuotes" style="
               background-color: var(--bg-card);
               color: var(--primary);
               border: 1px solid var(--primary);
               width: 100%;
               padding: 12px;
-            "
-          >
-            Lihat Semua Kutipan ▼
-          </button>
-        </div>
+            ">
+          Lihat Semua Kutipan ▼
+        </button>
       </div>
     </div>
+  </div>
 
-    <script type="module" src="index.js"></script>
-  </body>
+  <script type="module" src="index.js"></script>
+</body>
+
 </html>
 </file>
 
@@ -420,138 +935,229 @@ document.addEventListener("DOMContentLoaded", async () => {
 });
 </file>
 
-<file path="src/entrypoints/popup/index.html">
-<!doctype html>
-<html>
-  <head>
-    <style>
-      body {
-        font-family:
-          system-ui,
-          -apple-system,
-          sans-serif;
-        width: 250px;
-        padding: 16px;
-        color: #333;
-      }
-      .row {
-        margin-bottom: 16px;
-      }
-      label {
-        display: block;
-        font-size: 13px;
-        margin-bottom: 6px;
-        font-weight: 500;
-      }
-      .checkbox-label {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        margin-bottom: 0;
-      }
-      input[type="number"],
-      textarea {
-        width: 100%;
-        padding: 8px;
-        box-sizing: border-box;
-        border: 1px solid #ccc;
-        border-radius: 4px;
-        font-family: monospace;
-      }
-      textarea {
-        resize: vertical;
-      }
-      button {
-        width: 100%;
-        padding: 10px;
-        background-color: #0056b3;
-        color: white;
-        border: none;
-        border-radius: 4px;
-        cursor: pointer;
-        font-weight: bold;
-        margin-bottom: 8px;
-      }
-      button:hover {
-        background-color: #004494;
-      }
-      .btn-success {
-        background-color: #198754;
-      }
-      .btn-success:hover {
-        background-color: #157347;
-      }
-      hr {
-        border: 0;
-        border-top: 1px solid #eaeaea;
-        margin: 16px 0;
-      }
-    </style>
-  </head>
-  <body>
-    <div class="row">
-      <label class="checkbox-label">
-        <input type="checkbox" id="enabled" />
-        Aktifkan Mode Fokus
-      </label>
-    </div>
+<file path="src/features/dark-mode/background.js">
+import { getHostname } from "../../shared/utils/url-validator.js";
+import { applySmartDarkMode, removeSmartDarkMode } from "./engine.js";
 
-    <div class="row">
-      <label for="maxTabs">Batas Maksimal Tab</label>
-      <input type="number" id="maxTabs" min="1" />
-    </div>
+let state = { enabled: false, excluded: [] };
 
-    <div class="row">
-      <label for="blockedSites"
-        >Blokir Situs (pisahkan dengan koma atau baris baru)</label
-      >
-      <textarea
-        id="blockedSites"
-        rows="4"
-        placeholder="facebook.com&#10;twitter.com"
-      ></textarea>
-    </div>
+export function initDarkMode() {
+    chrome.storage.sync.get(["darkEnabled", "darkExcluded"], (data) => {
+        state.enabled = data.darkEnabled ?? false;
+        state.excluded = data.darkExcluded ?? [];
+    });
 
-    <button id="saveBtn">Simpan Pengaturan</button>
+    chrome.storage.onChanged.addListener((changes, namespace) => {
+        if (namespace === "sync") {
+            let hasChanges = false;
+            if (changes.darkEnabled) {
+                state.enabled = changes.darkEnabled.newValue;
+                hasChanges = true;
+            }
+            if (changes.darkExcluded) {
+                state.excluded = changes.darkExcluded.newValue;
+                hasChanges = true;
+            }
+            if (hasChanges) applyToAllTabs();
+        }
+    });
 
-    <button id="copyMdBtn" class="btn-success">Copy Blog as .md</button>
+    chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+        // Jalankan saat tab sedang dimuat
+        if (changeInfo.status === "loading" && tab.url) {
+            handleTab(tabId, tab.url);
+        }
+    });
+}
 
-    <button
-      id="pasteHtmlBtn"
-      class="btn-secondary"
-      style="background-color: #0dcaf0; color: #000; margin-top: 8px"
-    >
-      Paste Code as .html
-    </button>
+async function applyToAllTabs() {
+    const tabs = await chrome.tabs.query({ url: ["http://*/*", "https://*/*"] });
+    for (const tab of tabs) {
+        handleTab(tab.id, tab.url);
+    }
+}
 
-    <button
-      id="openDashboardBtn"
-      class="btn-secondary"
-      style="background-color: #6c757d; color: white; margin-top: 8px"
-    >
-      Buka Dashboard Kutipan
-    </button>
+function isUrlExcluded(targetUrl) {
+    const hostname = getHostname(targetUrl);
+    if (!hostname) return true;
+    return state.excluded.some((site) => hostname.includes(site));
+}
 
-    <script type="module" src="index.js"></script>
-  </body>
-</html>
+async function handleTab(tabId, url) {
+    if (!url.startsWith("http")) return;
+
+    const shouldApply = state.enabled && !isUrlExcluded(url);
+
+    try {
+        if (shouldApply) {
+            await chrome.scripting.executeScript({
+                target: { tabId },
+                func: applySmartDarkMode // Memanggil engine pintar kita
+            });
+        } else {
+            await chrome.scripting.executeScript({
+                target: { tabId },
+                func: removeSmartDarkMode
+            });
+        }
+    } catch (e) {
+        // Biasanya gagal jika mencoba inject di chrome:// atau Chrome Web Store
+    }
+}
 </file>
 
-<file path="src/entrypoints/popup/index.js">
-import { initFocusModeUI } from "../../features/focus-mode/popup-ui.js";
-import { initDomExtractorUI } from "../../features/dom-extractor/parser.js";
+<file path="src/features/dark-mode/engine.js">
+/**
+ * Smart Dark Mode Engine (Production-Ready)
+ * Menggunakan pendekatan Heuristik Berlapis dan DOM Mutation Observer 
+ * untuk mendukung Single Page Applications (SPA).
+ */
+export function applySmartDarkMode() {
+    if (window.__DEVKITA_DARK_ENGINE) return;
+    window.__DEVKITA_DARK_ENGINE = true;
 
-document.addEventListener("DOMContentLoaded", async () => {
-  await initFocusModeUI();
-  initDomExtractorUI();
+    const evaluateTheme = () => {
+        const html = document.documentElement;
+        const body = document.body;
+        if (!body) return false;
 
-  const openDashboardBtn = document.getElementById("openDashboardBtn");
-  if (openDashboardBtn) {
-    openDashboardBtn.addEventListener("click", () => {
-      chrome.runtime.openOptionsPage();
+        // Lapis 1: Deteksi Atribut Global & Class (Standar Industri Modern)
+        // Mengecek apakah developer web sudah menyuntikkan class/data-theme dark.
+        const htmlStr = (html.className + ' ' + (html.getAttribute('data-theme') || '')).toLowerCase();
+        const bodyStr = (body.className + ' ' + (body.getAttribute('data-theme') || '')).toLowerCase();
+
+        if (htmlStr.includes('dark') || bodyStr.includes('dark')) return true;
+
+        // Lapis 2: Deteksi CSSOM (CSS Object Model)
+        const bodyStyle = window.getComputedStyle(body);
+        const rootStyle = window.getComputedStyle(html);
+
+        if (rootStyle.colorScheme.includes('dark') || bodyStyle.colorScheme.includes('dark')) return true;
+
+        // Helper: Kalkulator Luminance (YIQ Formula)
+        const getBrightness = (colorStr) => {
+            const match = colorStr.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+            if (match) {
+                // Abaikan warna dengan alpha channel 0 (transparan murni)
+                if (colorStr.includes('rgba') && parseFloat(colorStr.split(',')[3]) === 0) return null;
+                return ((parseInt(match[1]) * 299) + (parseInt(match[2]) * 587) + (parseInt(match[3]) * 114)) / 1000;
+            }
+            return null;
+        };
+
+        // Lapis 3: Deteksi Warna Teks (Paling Akurat)
+        // Jika warna default teks adalah putih/terang, sudah pasti background-nya gelap.
+        const textBrightness = getBrightness(bodyStyle.color);
+        if (textBrightness !== null && textBrightness > 170) return true;
+
+        // Lapis 4: Deteksi Native Background Color
+        const bgBrightness = getBrightness(bodyStyle.backgroundColor) ?? getBrightness(rootStyle.backgroundColor);
+        if (bgBrightness !== null && bgBrightness < 128) return true;
+
+        // Jika semua cek gagal, asumsikan web masih menggunakan Light Mode
+        return false;
+    };
+
+    const injectCSS = () => {
+        if (document.getElementById('devkita-dark-theme')) return;
+        const style = document.createElement('style');
+        style.id = 'devkita-dark-theme';
+        // Menambahkan isolasi selector untuk mencegah bleed-out
+        style.textContent = `
+      html {
+        filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%) !important;
+        background-color: #121212 !important;
+      }
+      img, video, iframe, canvas, svg, [style*="background-image"] {
+        filter: invert(100%) hue-rotate(180deg) !important;
+      }
+    `;
+        document.documentElement.appendChild(style);
+    };
+
+    const removeCSS = () => {
+        const style = document.getElementById('devkita-dark-theme');
+        if (style) style.remove();
+    };
+
+    const checkAndApply = () => {
+        const isAlreadyDark = evaluateTheme();
+
+        if (isAlreadyDark) {
+            removeCSS(); // Cabut injeksi jika terdeteksi native dark mode
+        } else {
+            injectCSS(); // Eksekusi injeksi jika web memang terang
+        }
+    };
+
+    // 1. Eksekusi Inisial
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', checkAndApply);
+    } else {
+        checkAndApply();
+    }
+
+    // 2. Eksekusi Reaktif (MutationObserver untuk SPA)
+    // Memantau perubahan atribut pada root level tanpa mengorbankan main thread performance.
+    const observer = new MutationObserver(() => {
+        // Debounce/Throttle sederhana tidak diperlukan di sini karena 
+        // operasi evaluateTheme memiliki kompleksitas waktu O(1).
+        checkAndApply();
     });
-  }
-});
+
+    if (document.body) {
+        observer.observe(document.documentElement, {
+            attributes: true,
+            attributeFilter: ['class', 'data-theme', 'style']
+        });
+        observer.observe(document.body, {
+            attributes: true,
+            attributeFilter: ['class', 'data-theme', 'style']
+        });
+    }
+
+    // Simpan instance ke global scope agar garbage collector bisa membersihkannya nanti
+    window.__DEVKITA_DARK_OBSERVER = observer;
+}
+
+export function removeSmartDarkMode() {
+    const style = document.getElementById('devkita-dark-theme');
+    if (style) style.remove();
+
+    if (window.__DEVKITA_DARK_OBSERVER) {
+        window.__DEVKITA_DARK_OBSERVER.disconnect();
+        delete window.__DEVKITA_DARK_OBSERVER;
+    }
+    window.__DEVKITA_DARK_ENGINE = false;
+}
+</file>
+
+<file path="src/features/dark-mode/popup-ui.js">
+export async function initDarkModeUI() {
+    const darkEnabledEl = document.getElementById("darkEnabled");
+    const darkExcludedEl = document.getElementById("darkExcluded");
+    const saveBtn = document.getElementById("saveBtn");
+
+    if (!darkEnabledEl || !darkExcludedEl || !saveBtn) return;
+
+    // Load data saat popup dibuka
+    const data = await chrome.storage.sync.get(["darkEnabled", "darkExcluded"]);
+    darkEnabledEl.checked = data.darkEnabled ?? false;
+    darkExcludedEl.value = (data.darkExcluded ?? []).join("\n");
+
+    // Nebeng ke tombol "Simpan Pengaturan" yang sudah ada
+    saveBtn.addEventListener("click", async () => {
+        const rawSites = darkExcludedEl.value.split(/\r?\n|,/);
+        const sanitizedSites = rawSites
+            .map((site) => site.trim().toLowerCase())
+            .filter((site) => site.length > 0);
+
+        await chrome.storage.sync.set({
+            darkEnabled: darkEnabledEl.checked,
+            darkExcluded: sanitizedSites,
+        });
+    });
+}
 </file>
 
 <file path="src/features/dom-extractor/parser.js">
@@ -846,66 +1452,6 @@ export function initDomExtractorUI() {
 }
 </file>
 
-<file path="src/features/fake-filler/filler-engine.js">
-import { triggerBadgeFeedback } from "../../shared/utils/ui-feedback.js";
-
-function fakeFillerEngine() {
-  const inputs = document.querySelectorAll("input, textarea, select");
-
-  const dummyData = {
-    name: ["Ojan Haris", "Fauzan Hasyim", "Devkita Tester", "John Doe"],
-    email: ["test@example.com", "dev@devkita.id", "ojan@mail.com"],
-    phone: ["081234567890", "085712345678"],
-    address: ["Jl. Slamet Riyadi No. 1, Solo", "Karanganyar, Central Java"],
-    lorem:
-      "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.",
-  };
-
-  const getRandom = (arr) => arr[Math.floor(Math.random() * arr.length)];
-
-  inputs.forEach((el) => {
-    // Lewati elemen yang tersembunyi atau tidak bisa diedit
-    if (el.disabled || el.readOnly || el.type === "hidden") return;
-
-    const name = (el.name || el.id || el.placeholder || "").toLowerCase();
-    const type = el.type;
-
-    if (type === "text" || type === "textarea") {
-      if (name.includes("name")) el.value = getRandom(dummyData.name);
-      else if (name.includes("mail")) el.value = getRandom(dummyData.email);
-      else if (name.includes("phone") || name.includes("tel"))
-        el.value = getRandom(dummyData.phone);
-      else if (name.includes("address"))
-        el.value = getRandom(dummyData.address);
-      else el.value = "Test Input " + Math.floor(Math.random() * 100);
-
-      if (el.tagName === "TEXTAREA") el.value = dummyData.lorem;
-    } else if (type === "email") el.value = getRandom(dummyData.email);
-    else if (type === "tel") el.value = getRandom(dummyData.phone);
-    else if (type === "number") el.value = Math.floor(Math.random() * 1000);
-    else if (type === "password") el.value = "Password123!";
-    else if (type === "checkbox" || type === "radio") el.checked = true;
-    else if (el.tagName === "SELECT") {
-      if (el.options.length > 1) el.selectedIndex = 1;
-    }
-
-    // Trigger event agar framework (seperti React/Vue) mendeteksi perubahan input
-    el.dispatchEvent(new Event("input", { bubbles: true }));
-    el.dispatchEvent(new Event("change", { bubbles: true }));
-  });
-}
-
-export async function handleFakeFillerMenu(info, tab) {
-  if (info.menuItemId === "fake-filler") {
-    await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      func: fakeFillerEngine,
-    });
-    triggerBadgeFeedback(tab.id, "Filled", "#ffc107");
-  }
-}
-</file>
-
 <file path="src/features/focus-mode/background.js">
 import { recordDistractionAttempt } from "../time-tracker/engine.js";
 
@@ -991,100 +1537,133 @@ export async function initFocusModeUI() {
 }
 </file>
 
-<file path="src/features/quotes-manager/context-menu.js">
-import { isAllowedUrl } from "../../shared/utils/url-validator.js";
+<file path="src/features/link-extractor/engine.js">
 import { triggerBadgeFeedback } from "../../shared/utils/ui-feedback.js";
-import { StorageAPI } from "../../shared/api/storage.js";
-import { handleDomExtractorMenu } from "../dom-extractor/parser.js";
-import { handleFakeFillerMenu } from "../fake-filler/filler-engine.js";
 
-export function initContextMenus() {
-  chrome.runtime.onInstalled.addListener(() => {
-    // Menu Simpan/Copy Teks & Kode
-    chrome.contextMenus.create({
-      id: "save-text",
-      title: "📝 Simpan Teks ke Dashboard",
-      contexts: ["selection"],
+/**
+ * Pure function untuk dieksekusi di dalam isolated content script.
+ * Melakukan scraping, sanitasi parameter (tracker cleaner), dan deduplikasi URI.
+ */
+function extractAllLinksEngine() {
+    const anchorNodes = document.querySelectorAll("a[href]");
+    const uniqueLinks = new Set();
+
+    // Daftar parameter tracker didefinisikan di dalam fungsi karena 
+    // fungsi ini dieksekusi dalam isolated scope tab target.
+    const EXACT_TRACKERS = new Set([
+        'fbclid', 'gclid', 'igshid', 'ref', '_ga',
+        'mc_cid', 'mc_eid', 'yclid', '_ke', 'mkt_tok'
+    ]);
+    const PREFIX_TRACKERS = ['utm_'];
+
+    anchorNodes.forEach((a) => {
+        try {
+            const url = new URL(a.href);
+            if (url.protocol === "http:" || url.protocol === "https:") {
+
+                // 1. Identifikasi parameter kotor
+                const keysToDelete = [];
+                for (const key of url.searchParams.keys()) {
+                    const lowerKey = key.toLowerCase();
+                    const isExactMatch = EXACT_TRACKERS.has(lowerKey);
+                    const isPrefixMatch = PREFIX_TRACKERS.some(prefix => lowerKey.startsWith(prefix));
+
+                    if (isExactMatch || isPrefixMatch) {
+                        keysToDelete.push(key);
+                    }
+                }
+
+                // 2. Sanitasi URL secara in-place
+                keysToDelete.forEach(key => url.searchParams.delete(key));
+
+                // 3. Simpan URL yang sudah benar-benar bersih ke dalam Set
+                uniqueLinks.add(url.href);
+            }
+        } catch (e) {
+            // Evaluasi URI asimetris diabaikan secara silent
+        }
     });
-    chrome.contextMenus.create({
-      id: "save-code",
-      title: "💻 Simpan Kode ke Dashboard",
-      contexts: ["selection"],
-    });
-    chrome.contextMenus.create({
-      id: "fake-filler",
-      title: "🛠️ Fill Form with Fake Data",
-      contexts: ["all"],
-    });
 
-    // FITUR BARU: Copy Blog as MD (Berbasis DOM Parsing)
-    chrome.contextMenus.create({
-      id: "copy-blog-md",
-      title: "📋 Copy Seluruh Blog as MD",
-      contexts: ["page"],
-    });
+    return Array.from(uniqueLinks).join("\n");
+}
 
-    // FITUR BARU: Save Code as HTML (Khusus untuk blok kode yang diseleksi)
-    chrome.contextMenus.create({
-      id: "save-code-html",
-      title: "📄 Save Seleksi as .html",
-      contexts: ["selection"],
-    });
+/**
+ * Handler eksekusi via Context Menu (Background Context)
+ */
+export async function handleLinkExtractorMenu(info, tab) {
+    if (info.menuItemId === "copy-all-links") {
+        try {
+            const results = await chrome.scripting.executeScript({
+                target: { tabId: tab.id },
+                func: extractAllLinksEngine,
+            });
 
-    chrome.contextMenus.create({
-      id: "separator-1",
-      type: "separator",
-      contexts: ["all"],
-    });
-    chrome.contextMenus.create({
-      id: "open-dashboard",
-      title: "📁 Buka Dashboard Kutipan",
-      contexts: ["all"],
-    });
-  });
+            const extractedLinks = results[0]?.result;
 
-  chrome.contextMenus.onClicked.addListener(async (info, tab) => {
-    try {
-      if (!tab?.id || !isAllowedUrl(tab.url)) {
-        return;
-      }
+            if (!extractedLinks) throw new Error("No links found");
 
-      switch (info.menuItemId) {
-        case "save-text":
-          await StorageAPI.saveQuote({
-            text: info.selectionText,
-            url: info.pageUrl,
-            timestamp: new Date().toISOString(),
-          });
-          triggerBadgeFeedback(tab.id, "Saved", "#198754");
-          break;
+            await chrome.scripting.executeScript({
+                target: { tabId: tab.id },
+                func: (text) => navigator.clipboard.writeText(text),
+                args: [extractedLinks],
+            });
 
-        case "save-code":
-          await StorageAPI.saveQuote({
-            text: `\`\`\`\n${info.selectionText}\n\`\`\``,
-            url: info.pageUrl,
-            timestamp: new Date().toISOString(),
-          });
-          triggerBadgeFeedback(tab.id, "Code", "#0dcaf0");
-          break;
-
-        case "open-dashboard":
-          chrome.runtime.openOptionsPage();
-          break;
-
-        case "copy-blog-md":
-        case "save-code-html":
-          await handleDomExtractorMenu(info, tab);
-          break;
-
-        case "fake-filler":
-          await handleFakeFillerMenu(info, tab);
-          break;
-      }
-    } catch (error) {
-      console.error("Context Menu Error:", error);
+            triggerBadgeFeedback(tab.id, "Copied", "#6f42c1");
+        } catch (error) {
+            console.error("[Link Extractor] Operation failed:", error);
+            triggerBadgeFeedback(tab.id, "Failed", "#dc2626");
+        }
     }
-  });
+}
+
+/**
+ * Handler eksekusi via Popup (UI Context)
+ */
+export async function initLinkExtractorUI() {
+    const copyLinksBtn = document.getElementById("copyLinksBtn");
+
+    if (!copyLinksBtn) return;
+
+    copyLinksBtn.addEventListener("click", async () => {
+        try {
+            const originalText = copyLinksBtn.innerText;
+            copyLinksBtn.innerText = "⏳ Memproses...";
+            copyLinksBtn.disabled = true;
+
+            const [activeTab] = await chrome.tabs.query({
+                active: true,
+                currentWindow: true,
+            });
+
+            if (!activeTab) throw new Error("Tidak ada tab aktif.");
+
+            const results = await chrome.scripting.executeScript({
+                target: { tabId: activeTab.id },
+                func: extractAllLinksEngine,
+            });
+
+            const extractedLinks = results[0]?.result;
+
+            if (extractedLinks) {
+                await navigator.clipboard.writeText(extractedLinks);
+                copyLinksBtn.innerText = `✅ Tersalin (${extractedLinks.split('\n').length} link)`;
+            } else {
+                copyLinksBtn.innerText = "⚠️ Tidak Ada Link";
+            }
+
+            setTimeout(() => {
+                copyLinksBtn.innerText = originalText;
+                copyLinksBtn.disabled = false;
+            }, 2000);
+        } catch (error) {
+            console.error("[Link Extractor] Popup execution failed:", error);
+            copyLinksBtn.innerText = "❌ Gagal Menyalin";
+            setTimeout(() => {
+                copyLinksBtn.innerText = "Copy Semua Link";
+                copyLinksBtn.disabled = false;
+            }, 2000);
+        }
+    });
 }
 </file>
 
@@ -1397,6 +1976,247 @@ export function initTimeTracker() {
 }
 </file>
 
+<file path="src/features/video-speed/background.js">
+import { applyVideoSpeedController } from "./engine.js";
+
+export function initVideoSpeedController() {
+    chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+        // Filter out restricted protocols (chrome://, edge://, etc.)
+        if (changeInfo.status === "loading" && tab.url && tab.url.startsWith("http")) {
+            chrome.scripting.executeScript({
+                target: { tabId },
+                func: applyVideoSpeedController
+            }).catch((err) => {
+                // Silently catch environment restriction errors
+                console.warn(`[Devkita VDS] Skipped injection for ${tab.url}`, err);
+            });
+        }
+    });
+}
+</file>
+
+<file path="src/features/video-speed/engine.js">
+/**
+ * Video Speed Controller Engine
+ * Mengontrol playback speed semua elemen video secara reaktif.
+ */
+
+export function applyVideoSpeedController() {
+    // Prevent duplicate initialization
+    if (window.__DEVKITA_VDS_ENGINE__) return;
+    window.__DEVKITA_VDS_ENGINE__ = true;
+
+    // -----------------------------
+    // State
+    // -----------------------------
+    let playbackSpeed = 1.0;
+    let fadeTimeout = null;
+    let targetVideo = null;
+
+    // -----------------------------
+    // UI: Floating Badge
+    // -----------------------------
+    const badge = document.createElement("div");
+
+    badge.id = "devkita-vds-indicator";
+
+    Object.assign(badge.style, {
+        position: "fixed",
+        background: "rgba(15, 23, 42, 0.85)",
+        color: "#f8fafc",
+        fontFamily:
+            "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+        fontSize: "13px",
+        fontWeight: "600",
+        padding: "6px 12px",
+        borderRadius: "20px",
+        border: "1px solid rgba(255,255,255,0.1)",
+        zIndex: "2147483647",
+        pointerEvents: "none",
+        transition: "opacity 0.2s cubic-bezier(0.4,0,0.2,1)",
+        opacity: "0",
+        backdropFilter: "blur(4px)",
+        boxShadow: "0 4px 6px rgba(0,0,0,0.3)",
+    });
+
+    document.documentElement.appendChild(badge);
+
+    // -----------------------------
+    // Helpers
+    // -----------------------------
+
+    const getAllVideos = () => {
+        return document.querySelectorAll("video");
+    };
+
+    const syncPlaybackRates = () => {
+        getAllVideos().forEach((video) => {
+            if (video.playbackRate !== playbackSpeed) {
+                video.playbackRate = playbackSpeed;
+            }
+        });
+    };
+
+    const showBadge = (videoNode) => {
+        if (!videoNode || !document.contains(videoNode)) return;
+
+        const rect = videoNode.getBoundingClientRect();
+
+        // Skip if outside viewport
+        const isOutsideViewport =
+            rect.bottom < 0 ||
+            rect.top > window.innerHeight ||
+            rect.right < 0 ||
+            rect.left > window.innerWidth;
+
+        if (isOutsideViewport) return;
+
+        badge.textContent = `${playbackSpeed.toFixed(2)}x`;
+
+        badge.style.top = `${Math.max(10, rect.top + 16)}px`;
+        badge.style.left = `${Math.max(10, rect.left + 16)}px`;
+        badge.style.opacity = "1";
+
+        clearTimeout(fadeTimeout);
+
+        fadeTimeout = setTimeout(() => {
+            badge.style.opacity = "0";
+        }, 1500);
+    };
+
+    const updateSpeed = (delta) => {
+        playbackSpeed = Math.min(
+            16,
+            Math.max(0.25, playbackSpeed + delta)
+        );
+
+        syncPlaybackRates();
+
+        const activeVideo =
+            targetVideo || document.querySelector("video");
+
+        showBadge(activeVideo);
+    };
+
+    // -----------------------------
+    // Keyboard Controls
+    // -----------------------------
+    const handleKeydown = (event) => {
+        const target = event.target;
+
+        const isEditable =
+            target?.isContentEditable ||
+            ["INPUT", "TEXTAREA", "SELECT"].includes(target?.tagName);
+
+        if (isEditable) return;
+
+        const key = event.key.toLowerCase();
+
+        switch (key) {
+            case "d":
+                updateSpeed(0.25);
+                break;
+
+            case "s":
+                updateSpeed(-0.25);
+                break;
+
+            default:
+                break;
+        }
+    };
+
+    document.addEventListener("keydown", handleKeydown, {
+        capture: true,
+    });
+
+    // -----------------------------
+    // Mouse Hover Detection
+    // -----------------------------
+    const handleMouseMove = (event) => {
+        const elements = document.elementsFromPoint(
+            event.clientX,
+            event.clientY
+        );
+
+        const hoveredVideo = elements.find(
+            (el) => el.tagName === "VIDEO"
+        );
+
+        if (!hoveredVideo) return;
+
+        targetVideo = hoveredVideo;
+
+        // Force resync (YouTube suka reset playbackRate)
+        if (hoveredVideo.playbackRate !== playbackSpeed) {
+            hoveredVideo.playbackRate = playbackSpeed;
+        }
+
+        showBadge(hoveredVideo);
+    };
+
+    document.addEventListener("mousemove", handleMouseMove, {
+        passive: true,
+    });
+
+    // -----------------------------
+    // Mutation Observer
+    // -----------------------------
+    const domObserver = new MutationObserver((mutations) => {
+        let shouldSync = false;
+
+        for (const mutation of mutations) {
+            for (const node of mutation.addedNodes) {
+                if (!(node instanceof HTMLElement)) continue;
+
+                if (
+                    node.tagName === "VIDEO" ||
+                    node.querySelector?.("video")
+                ) {
+                    shouldSync = true;
+                    break;
+                }
+            }
+
+            if (shouldSync) break;
+        }
+
+        if (shouldSync) {
+            syncPlaybackRates();
+        }
+    });
+
+    if (document.body) {
+        domObserver.observe(document.body, {
+            childList: true,
+            subtree: true,
+        });
+    }
+
+    // -----------------------------
+    // Cleanup API
+    // -----------------------------
+    window.__DEVKITA_VDS_CLEANUP__ = () => {
+        document.removeEventListener("keydown", handleKeydown, {
+            capture: true,
+        });
+
+        document.removeEventListener("mousemove", handleMouseMove);
+
+        domObserver.disconnect();
+
+        clearTimeout(fadeTimeout);
+
+        badge.remove();
+
+        delete window.__DEVKITA_VDS_ENGINE__;
+    };
+
+    // Initial sync
+    syncPlaybackRates();
+}
+</file>
+
 <file path="src/shared/api/storage.js">
 export const StorageAPI = {
   /**
@@ -1494,6 +2314,504 @@ export function getHostname(urlStr) {
 }
 </file>
 
+<file path="src/entrypoints/background/index.js">
+import { initFocusMode } from "../../features/focus-mode/background.js";
+import { initTimeTracker } from "../../features/time-tracker/engine.js";
+import { initContextMenus } from "../../features/quotes-manager/context-menu.js";
+import { initDarkMode } from "../../features/dark-mode/background.js";
+import { initVideoSpeedController } from "../../features/video-speed/background.js";
+import { initLinkCleaner } from "../../features/link-cleaner/background.js";
+import { applyPomodoroOverlay } from "../../features/pomodoro/engine.js";
+import { initPomodoro } from "../../features/pomodoro/background.js";
+
+function bootstrapServices() {
+  console.log("Initializing Service Worker...");
+
+  initFocusMode();
+  initTimeTracker();
+  initContextMenus();
+  initDarkMode();
+  initVideoSpeedController();
+  initLinkCleaner();
+  initPomodoro();
+}
+
+bootstrapServices();
+</file>
+
+<file path="src/features/fake-filler/filler-engine.js">
+import { triggerBadgeFeedback } from "../../shared/utils/ui-feedback.js";
+
+/**
+ * Core Engine yang diinjeksi ke dalam DOM halaman.
+ * Fungsi ini harus berifat self-contained (tidak memiliki dependensi eksternal) 
+ * karena dieksekusi di isolated environment melalui chrome.scripting.
+ */
+function fakeFillerEngine(customConfig = {}) {
+  // --- 1. Data Generators (Internal Faker) ---
+  const generators = {
+    firstName: () => {
+      const names = ["Fauzan", "Budi", "Sarah", "John", "Doe", "Jane", "Alice", "Bob", "Charlie", "Diana"];
+      return names[Math.floor(Math.random() * names.length)];
+    },
+    lastName: () => {
+      const names = ["Hasyim", "Wijaya", "Smith", "Johnson", "Williams", "Brown", "Jones", "Garcia"];
+      return names[Math.floor(Math.random() * names.length)];
+    },
+    company: () => ["Devkita", "TechCorp", "InnoSystems", "GlobalNet"][Math.floor(Math.random() * 4)],
+    email: (fname, lname) => `${fname.toLowerCase()}.${lname.toLowerCase()}${Math.floor(Math.random() * 1000)}@example.com`,
+    phone: () => "08" + Math.floor(Math.random() * 10000000000).toString().padStart(10, "0"),
+    address: () => `${Math.floor(Math.random() * 100) + 1} Main Street, Suite ${Math.floor(Math.random() * 100)}`,
+    city: () => ["Solo", "Karanganyar", "Jakarta", "Bandung", "Surabaya"][Math.floor(Math.random() * 5)],
+    zip: () => Math.floor(10000 + Math.random() * 90000).toString(),
+    website: () => `https://www.example-${Math.floor(Math.random() * 1000)}.com`,
+    paragraph: () => "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer nec odio. Praesent libero. Sed cursus ante dapibus diam. Sed nisi.",
+    number: (min = 0, max = 100) => Math.floor(Math.random() * (max - min + 1)) + min,
+    date: () => {
+      const start = new Date(1980, 0, 1);
+      const end = new Date(2005, 11, 31);
+      return new Date(start.getTime() + Math.random() * (end.getTime() - start.getTime())).toISOString().split('T')[0];
+    }
+  };
+
+  // --- 2. Rule Engine (Konfigurasi Pola Matcher) ---
+  const defaultRules = [
+    { match: /first.?name|fname/i, type: 'text', generate: generators.firstName },
+    { match: /last.?name|lname/i, type: 'text', generate: generators.lastName },
+    { match: /name|fullname/i, type: 'text', generate: () => `${generators.firstName()} ${generators.lastName()}` },
+    { match: /company|organization|biz/i, type: 'text', generate: generators.company },
+    { match: /e.?mail/i, type: 'text', generate: () => generators.email(generators.firstName(), generators.lastName()) },
+    { match: /phone|tel|mobile/i, type: 'text', generate: generators.phone },
+    { match: /address|street/i, type: 'text', generate: generators.address },
+    { match: /city|town/i, type: 'text', generate: generators.city },
+    { match: /zip|postal/i, type: 'text', generate: generators.zip },
+    { match: /url|website|site/i, type: 'text', generate: generators.website },
+    { match: /date|dob|birth/i, type: 'text', generate: generators.date },
+  ];
+
+  // Gabungkan rules bawaan dengan custom config (jika ada dari parameter)
+  const rules = [...(customConfig.rules || []), ...defaultRules];
+
+  // --- 3. DOM Utilities & Framework Bypasser ---
+
+  // React/Vue sering melakukan override pada setter 'value' di level prototipe.
+  // Kita perlu memanggil native setter agar framework mendeteksi perubahan.
+  const setNativeValue = (element, value) => {
+    let prototype = Object.getPrototypeOf(element);
+    let descriptor = Object.getOwnPropertyDescriptor(prototype, 'value');
+
+    // Fallback traversal prototype chain jika descriptor tidak ditemukan
+    while (!descriptor && prototype !== null) {
+      prototype = Object.getPrototypeOf(prototype);
+      if (prototype) descriptor = Object.getOwnPropertyDescriptor(prototype, 'value');
+    }
+
+    if (descriptor && descriptor.set) {
+      descriptor.set.call(element, value);
+    } else {
+      element.value = value;
+    }
+
+    element.dispatchEvent(new Event('input', { bubbles: true }));
+    element.dispatchEvent(new Event('change', { bubbles: true }));
+    element.dispatchEvent(new Event('blur', { bubbles: true }));
+  };
+
+  // --- 4. Input Processing Logic ---
+
+  const isInteractable = (el) => {
+    const isHidden = el.type === 'hidden' || el.style.display === 'none' || el.style.visibility === 'hidden';
+    return !el.disabled && !el.readOnly && !isHidden;
+  };
+
+  const enforceConstraints = (el, val) => {
+    let result = String(val);
+    if (el.maxLength && el.maxLength > 0) {
+      result = result.substring(0, el.maxLength);
+    }
+    return result;
+  };
+
+  const processInput = (el) => {
+    if (!isInteractable(el)) return;
+
+    const aggregateIdentifier = [el.name, el.id, el.placeholder, el.getAttribute('aria-label')].filter(Boolean).join(' ');
+
+    if (el.tagName === 'SELECT') {
+      const options = Array.from(el.options).filter(opt => !opt.disabled && opt.value !== "");
+      if (options.length > 0) {
+        el.selectedIndex = options[Math.floor(Math.random() * options.length)].index;
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+      return;
+    }
+
+    if (el.type === 'checkbox' || el.type === 'radio') {
+      // Untuk radio, hindari men-check semua opsi dengan name yang sama
+      if (el.type === 'radio') {
+        const siblings = document.querySelectorAll(`input[type="radio"][name="${el.name}"]`);
+        if (siblings.length > 0) {
+          const randomNode = siblings[Math.floor(Math.random() * siblings.length)];
+          if (randomNode !== el && randomNode.checked) return; // Sudah ada yang ter-check
+        }
+      }
+      el.checked = Math.random() > 0.5 || el.required; // Default: 50% chance, kecuali required
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+      return;
+    }
+
+    let generatedValue = null;
+
+    // Evaluasi spesifik berdasarkan input type bawaan HTML5
+    if (el.type === 'email') generatedValue = generators.email(generators.firstName(), generators.lastName());
+    else if (el.type === 'number') {
+      const min = el.min ? parseFloat(el.min) : 0;
+      const max = el.max ? parseFloat(el.max) : 1000;
+      generatedValue = generators.number(min, max);
+    }
+    else if (el.type === 'tel') generatedValue = generators.phone();
+    else if (el.type === 'url') generatedValue = generators.website();
+    else if (el.type === 'date') generatedValue = generators.date();
+    else if (el.type === 'password') generatedValue = "TestPass!234"; // Default static complex password
+
+    // Jika tidak tertangkap type spesifik, gunakan Regex Rule Engine
+    if (!generatedValue) {
+      for (const rule of rules) {
+        if (rule.match.test(aggregateIdentifier)) {
+          generatedValue = rule.generate();
+          break;
+        }
+      }
+    }
+
+    // Fallback terakhir berdasarkan tag
+    if (!generatedValue) {
+      generatedValue = el.tagName === 'TEXTAREA' ? generators.paragraph() : generators.firstName();
+    }
+
+    // Terapkan value dengan menghormati max-length dan trigger state management framework
+    setNativeValue(el, enforceConstraints(el, generatedValue));
+  };
+
+  // --- 5. Main Execution ---
+  document.querySelectorAll('input, select, textarea').forEach(processInput);
+}
+
+// Handler eksekusi dari background/context-menu
+export async function handleFakeFillerMenu(info, tab) {
+  if (info.menuItemId === "fake-filler") {
+    // Kita bisa mengambil konfigurasi user (misalnya custom rules dari local storage) 
+    // dan mengirimkannya sebagai argument ke engine.
+    const customConfig = {};
+
+    await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: fakeFillerEngine,
+      args: [customConfig] // Passing data dari service worker ke isolated page environment
+    });
+
+    triggerBadgeFeedback(tab.id, "Filled", "#ffc107");
+  }
+}
+</file>
+
+<file path="src/features/quotes-manager/context-menu.js">
+import { isAllowedUrl } from "../../shared/utils/url-validator.js";
+import { triggerBadgeFeedback } from "../../shared/utils/ui-feedback.js";
+import { StorageAPI } from "../../shared/api/storage.js";
+import { handleDomExtractorMenu } from "../dom-extractor/parser.js";
+import { handleFakeFillerMenu } from "../fake-filler/filler-engine.js";
+import { handleLinkExtractorMenu } from "../link-extractor/engine.js";
+
+export function initContextMenus() {
+  chrome.runtime.onInstalled.addListener(() => {
+    // Menu Simpan/Copy Teks & Kode
+    chrome.contextMenus.create({
+      id: "save-text",
+      title: "📝 Simpan Teks ke Dashboard",
+      contexts: ["selection"],
+    });
+    chrome.contextMenus.create({
+      id: "save-code",
+      title: "💻 Simpan Kode ke Dashboard",
+      contexts: ["selection"],
+    });
+    chrome.contextMenus.create({
+      id: "fake-filler",
+      title: "🛠️ Fill Form with Fake Data",
+      contexts: ["all"],
+    });
+
+    // FITUR BARU: Copy Blog as MD (Berbasis DOM Parsing)
+    chrome.contextMenus.create({
+      id: "copy-blog-md",
+      title: "📋 Copy Seluruh Blog as MD",
+      contexts: ["page"],
+    });
+
+    // FITUR BARU: Save Code as HTML (Khusus untuk blok kode yang diseleksi)
+    chrome.contextMenus.create({
+      id: "save-code-html",
+      title: "📄 Save Seleksi as .html",
+      contexts: ["selection"],
+    });
+
+    chrome.contextMenus.create({
+      id: "copy-all-links",
+      title: "🔗 Copy Semua Link di Halaman",
+      contexts: ["page", "all"],
+    });
+
+    chrome.contextMenus.create({
+      id: "separator-1",
+      type: "separator",
+      contexts: ["all"],
+    });
+    chrome.contextMenus.create({
+      id: "open-dashboard",
+      title: "📁 Buka Dashboard Kutipan",
+      contexts: ["all"],
+    });
+  });
+
+  chrome.contextMenus.onClicked.addListener(async (info, tab) => {
+    try {
+      if (!tab?.id || !isAllowedUrl(tab.url)) {
+        return;
+      }
+
+      switch (info.menuItemId) {
+        case "save-text":
+          await StorageAPI.saveQuote({
+            text: info.selectionText,
+            url: info.pageUrl,
+            timestamp: new Date().toISOString(),
+          });
+          triggerBadgeFeedback(tab.id, "Saved", "#198754");
+          break;
+
+        case "save-code":
+          await StorageAPI.saveQuote({
+            text: `\`\`\`\n${info.selectionText}\n\`\`\``,
+            url: info.pageUrl,
+            timestamp: new Date().toISOString(),
+          });
+          triggerBadgeFeedback(tab.id, "Code", "#0dcaf0");
+          break;
+
+        case "open-dashboard":
+          chrome.runtime.openOptionsPage();
+          break;
+
+        case "copy-blog-md":
+        case "save-code-html":
+          await handleDomExtractorMenu(info, tab);
+          break;
+
+        case "fake-filler":
+          await handleFakeFillerMenu(info, tab);
+          break;
+
+        case "copy-all-links": 
+          await handleLinkExtractorMenu(info, tab);
+          break;
+      }
+    } catch (error) {
+      console.error("Context Menu Error:", error);
+    }
+  });
+}
+</file>
+
+<file path="src/entrypoints/popup/index.html">
+<!doctype html>
+<html>
+
+<head>
+  <style>
+    body {
+      font-family:
+        system-ui,
+        -apple-system,
+        sans-serif;
+      width: 250px;
+      padding: 16px;
+      color: #333;
+    }
+
+    .row {
+      margin-bottom: 16px;
+    }
+
+    label {
+      display: block;
+      font-size: 13px;
+      margin-bottom: 6px;
+      font-weight: 500;
+    }
+
+    .checkbox-label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 0;
+    }
+
+    input[type="number"],
+    textarea {
+      width: 100%;
+      padding: 8px;
+      box-sizing: border-box;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      font-family: monospace;
+    }
+
+    textarea {
+      resize: vertical;
+    }
+
+    button {
+      width: 100%;
+      padding: 10px;
+      background-color: #0056b3;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: bold;
+      margin-bottom: 8px;
+    }
+
+    button:hover {
+      background-color: #004494;
+    }
+
+    .btn-success {
+      background-color: #198754;
+    }
+
+    .btn-success:hover {
+      background-color: #157347;
+    }
+
+    hr {
+      border: 0;
+      border-top: 1px solid #eaeaea;
+      margin: 16px 0;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="row">
+    <label class="checkbox-label">
+      <input type="checkbox" id="enabled" />
+      Aktifkan Mode Fokus
+    </label>
+  </div>
+
+  <div class="row">
+    <label class="checkbox-label">
+      <input type="checkbox" id="cleanerEnabled" />
+      Aktifkan Link Cleaner (Hapus Tracker)
+    </label>
+  </div>
+
+  <div class="row">
+    <label for="maxTabs">Batas Maksimal Tab</label>
+    <input type="number" id="maxTabs" min="1" />
+  </div>
+
+  <div class="row">
+    <label for="blockedSites">Blokir Situs (pisahkan dengan koma atau baris baru)</label>
+    <textarea id="blockedSites" rows="4" placeholder="facebook.com&#10;twitter.com"></textarea>
+  </div>
+
+  <hr>
+  <div class="row">
+    <label class="checkbox-label">
+      <input type="checkbox" id="darkEnabled" />
+      Aktifkan Dark Mode
+    </label>
+  </div>
+
+  <div class="row">
+    <label for="darkExcluded">Pengecualian Dark Mode (Website Terang)</label>
+    <textarea id="darkExcluded" rows="3" placeholder="youtube.com&#10;github.com"></textarea>
+  </div>
+  <hr>
+  <div class="row" style="margin-bottom: 12px;">
+    <label>Responsive Tester (Buka di Window Baru)</label>
+    <div id="responsiveTesterContainer" style="display: flex; gap: 6px; margin-top: 6px;">
+      <button data-device="mobile" style="margin: 0; background-color: #6366f1; padding: 8px 4px; font-size: 11px;">
+        Mobile</button>
+      <button data-device="tablet" style="margin: 0; background-color: #8b5cf6; padding: 8px 4px; font-size: 11px;">
+        Tablet</button>
+      <button data-device="desktop" style="margin: 0; background-color: #a855f7; padding: 8px 4px; font-size: 11px;">
+        Desktop</button>
+    </div>
+  </div>
+  <hr>
+  <div class="row"
+    style="text-align: center; background: #f8f9fa; padding: 12px; border-radius: 8px; border: 1px solid #ccc;">
+    <h4 style="margin: 0 0 5px 0; font-size: 14px;" id="pomoStatus">💤 Pomodoro Nonaktif</h4>
+    <h2 style="margin: 0 0 12px 0; font-family: monospace; font-size: 32px;" id="pomoTimer">25:00</h2>
+
+    <button id="startPomoBtn" class="btn-success" style="margin-bottom: 0;">Mulai Fokus</button>
+    <button id="stopPomoBtn" style="background-color: #dc3545; display: none; margin-bottom: 0;">Berhenti</button>
+  </div>
+  <hr>
+  <button id="saveBtn">Simpan Pengaturan</button>
+
+  <button id="copyMdBtn" class="btn-success">Copy Blog as .md</button>
+
+  <button id="pasteHtmlBtn" class="btn-secondary" style="background-color: #0dcaf0; color: #000; margin-top: 8px">
+    Paste Code as .html
+  </button>
+
+  <button id="copyLinksBtn" class="btn-secondary" style="background-color: #6f42c1; color: white; margin-top: 8px">
+    Copy Semua Link
+  </button>
+
+  <button id="openDashboardBtn" class="btn-secondary" style="background-color: #6c757d; color: white; margin-top: 8px">
+    Buka Dashboard Kutipan
+  </button>
+
+  <script type="module" src="index.js"></script>
+</body>
+
+</html>
+</file>
+
+<file path="src/entrypoints/popup/index.js">
+import { initFocusModeUI } from "../../features/focus-mode/popup-ui.js";
+import { initDomExtractorUI } from "../../features/dom-extractor/parser.js";
+import { initDarkModeUI } from "../../features/dark-mode/popup-ui.js";
+import { initLinkExtractorUI } from "../../features/link-extractor/engine.js";
+import { initResponsiveTesterUI } from "../../features/responsive-tester/ui.js";
+import { initLinkCleanerUI } from "../../features/link-cleaner/popup-ui.js";
+import { initPomodoroPopupUI } from "../../features/pomodoro/popup-ui.js";
+
+document.addEventListener("DOMContentLoaded", async () => {
+  await initFocusModeUI();
+  await initDarkModeUI();
+  await initLinkCleanerUI();
+
+  initDomExtractorUI();
+  initLinkExtractorUI();
+  initResponsiveTesterUI();
+  initPomodoroPopupUI();
+
+  const openDashboardBtn = document.getElementById("openDashboardBtn");
+  if (openDashboardBtn) {
+    openDashboardBtn.addEventListener("click", () => {
+      chrome.runtime.openOptionsPage();
+    });
+  }
+});
+</file>
+
 <file path="manifest.json">
 {
     "manifest_version": 3,
@@ -1507,7 +2825,9 @@ export function getHostname(urlStr) {
         "contextMenus",
         "clipboardRead",
         "alarms",
-        "downloads"
+        "downloads",
+        "notifications",
+        "unlimitedStorage"
     ],
     "host_permissions": [
         "*://*/*"
@@ -1525,7 +2845,18 @@ export function getHostname(urlStr) {
         "service_worker": "src/entrypoints/background/index.js",
         "type": "module"
     },
-    "options_page": "src/entrypoints/options/index.html"
+    "options_page": "src/entrypoints/options/index.html",
+    "web_accessible_resources": [
+        {
+            "resources": [
+                "assets/chat.png",
+                "assets/icon-16.png"
+            ],
+            "matches": [
+                "<all_urls>"
+            ]
+        }
+    ]
 }
 </file>
 

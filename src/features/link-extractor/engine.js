@@ -2,23 +2,45 @@ import { triggerBadgeFeedback } from "../../shared/utils/ui-feedback.js";
 
 /**
  * Pure function untuk dieksekusi di dalam isolated content script.
- * Melakukan scraping, sanitasi, dan deduplikasi URI.
+ * Melakukan scraping, sanitasi parameter (tracker cleaner), dan deduplikasi URI.
  */
 function extractAllLinksEngine() {
     const anchorNodes = document.querySelectorAll("a[href]");
-
-    // Menggunakan Set untuk deduplikasi secara native (O(n) time complexity)
     const uniqueLinks = new Set();
+
+    // Daftar parameter tracker didefinisikan di dalam fungsi karena 
+    // fungsi ini dieksekusi dalam isolated scope tab target.
+    const EXACT_TRACKERS = new Set([
+        'fbclid', 'gclid', 'igshid', 'ref', '_ga',
+        'mc_cid', 'mc_eid', 'yclid', '_ke', 'mkt_tok'
+    ]);
+    const PREFIX_TRACKERS = ['utm_'];
 
     anchorNodes.forEach((a) => {
         try {
-            // Normalisasi URI dan abaikan fragment/hash murni atau pseudo-protocols
             const url = new URL(a.href);
             if (url.protocol === "http:" || url.protocol === "https:") {
+
+                // 1. Identifikasi parameter kotor
+                const keysToDelete = [];
+                for (const key of url.searchParams.keys()) {
+                    const lowerKey = key.toLowerCase();
+                    const isExactMatch = EXACT_TRACKERS.has(lowerKey);
+                    const isPrefixMatch = PREFIX_TRACKERS.some(prefix => lowerKey.startsWith(prefix));
+
+                    if (isExactMatch || isPrefixMatch) {
+                        keysToDelete.push(key);
+                    }
+                }
+
+                // 2. Sanitasi URL secara in-place
+                keysToDelete.forEach(key => url.searchParams.delete(key));
+
+                // 3. Simpan URL yang sudah benar-benar bersih ke dalam Set
                 uniqueLinks.add(url.href);
             }
         } catch (e) {
-            // Catch invalid URLs secara silent
+            // Evaluasi URI asimetris diabaikan secara silent
         }
     });
 
@@ -40,7 +62,6 @@ export async function handleLinkExtractorMenu(info, tab) {
 
             if (!extractedLinks) throw new Error("No links found");
 
-            // Injeksi kembali ke DOM tab untuk bypass pembatasan clipboard API di background script
             await chrome.scripting.executeScript({
                 target: { tabId: tab.id },
                 func: (text) => navigator.clipboard.writeText(text),
@@ -84,7 +105,6 @@ export async function initLinkExtractorUI() {
             const extractedLinks = results[0]?.result;
 
             if (extractedLinks) {
-                // Karena dieksekusi di popup, kita bisa memanggil clipboard API secara langsung
                 await navigator.clipboard.writeText(extractedLinks);
                 copyLinksBtn.innerText = `✅ Tersalin (${extractedLinks.split('\n').length} link)`;
             } else {

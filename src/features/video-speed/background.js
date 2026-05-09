@@ -9,7 +9,7 @@ export function initVideoSpeedController() {
                 func: applyVideoSpeedController
             }).catch((err) => {
                 // Silently catch environment restriction errors
-                console.warn(`[Devkita VDS] Skipped injection for ${tab.url}`, err);
+                console.warn(`[evn VDS] Skipped injection for ${tab.url}`, err);
             });
         }
     });

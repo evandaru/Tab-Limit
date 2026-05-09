@@ -10,7 +10,9 @@
         "contextMenus",
         "clipboardRead",
         "alarms",
-        "downloads"
+        "downloads",
+        "notifications",
+        "unlimitedStorage"
     ],
     "host_permissions": [
         "*://*/*"
@@ -28,5 +30,17 @@
         "service_worker": "src/entrypoints/background/index.js",
         "type": "module"
     },
-    "options_page": "src/entrypoints/options/index.html"
+    "options_page": "src/entrypoints/options/index.html",
+    "web_accessible_resources": [
+        {
+            "resources": [
+                "assets/chat.png",
+                "assets/icon-16.png",
+                "assets/kucing.gif"
+            ],
+            "matches": [
+                "<all_urls>"
+            ]
+        }
+    ]
 }

@@ -86,6 +86,13 @@
   </div>
 
   <div class="row">
+    <label class="checkbox-label">
+      <input type="checkbox" id="cleanerEnabled" />
+      Aktifkan Link Cleaner (Hapus Tracker)
+    </label>
+  </div>
+
+  <div class="row">
     <label for="maxTabs">Batas Maksimal Tab</label>
     <input type="number" id="maxTabs" min="1" />
   </div>
@@ -107,7 +114,28 @@
     <label for="darkExcluded">Pengecualian Dark Mode (Website Terang)</label>
     <textarea id="darkExcluded" rows="3" placeholder="youtube.com&#10;github.com"></textarea>
   </div>
+  <hr>
+  <div class="row" style="margin-bottom: 12px;">
+    <label>Responsive Tester (Buka di Window Baru)</label>
+    <div id="responsiveTesterContainer" style="display: flex; gap: 6px; margin-top: 6px;">
+      <button data-device="mobile" style="margin: 0; background-color: #6366f1; padding: 8px 4px; font-size: 11px;">
+        Mobile</button>
+      <button data-device="tablet" style="margin: 0; background-color: #8b5cf6; padding: 8px 4px; font-size: 11px;">
+        Tablet</button>
+      <button data-device="desktop" style="margin: 0; background-color: #a855f7; padding: 8px 4px; font-size: 11px;">
+        Desktop</button>
+    </div>
+  </div>
+  <hr>
+  <div class="row"
+    style="text-align: center; background: #f8f9fa; padding: 12px; border-radius: 8px; border: 1px solid #ccc;">
+    <h4 style="margin: 0 0 5px 0; font-size: 14px;" id="pomoStatus">💤 Pomodoro Nonaktif</h4>
+    <h2 style="margin: 0 0 12px 0; font-family: monospace; font-size: 32px;" id="pomoTimer">25:00</h2>
 
+    <button id="startPomoBtn" class="btn-success" style="margin-bottom: 0;">Mulai Fokus</button>
+    <button id="stopPomoBtn" style="background-color: #dc3545; display: none; margin-bottom: 0;">Berhenti</button>
+  </div>
+  <hr>
   <button id="saveBtn">Simpan Pengaturan</button>
 
   <button id="copyMdBtn" class="btn-success">Copy Blog as .md</button>
