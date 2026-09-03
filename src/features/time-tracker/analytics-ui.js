@@ -1,43 +1,303 @@
 import { formatTime, getTodayKey } from "../../shared/utils/time-formatter.js";
 
-export async function renderTimeAnalytics() {
+const PALETTE = [
+  "#3b82f6", // Blue
+  "#10b981", // Emerald
+  "#f59e0b", // Amber
+  "#8b5cf6", // Purple
+  "#ec4899", // Pink
+  "#06b6d4", // Cyan
+  "#64748b", // Slate (others)
+];
+
+/**
+ * Mengambil data analitik dari chrome.storage.local dan mengagregasi berdasarkan filter waktu
+ * @param {'today' | 'week' | 'month' | 'year' | 'all'} filter 
+ */
+export async function getAggregatedAnalytics(filter = "today") {
+  const allData = await chrome.storage.local.get(null);
+  const now = new Date();
+  const todayKey = getTodayKey();
+  const todayDateStr = todayKey.replace("analytics_", "");
+
+  let totalTime = 0;
+  let distractions = 0;
+  const domains = {};
+  const dailyHistory = {}; // dateStr -> totalSeconds
+
+  // Ambil semua entri analytics_YYYY-MM-DD
+  const dateKeys = Object.keys(allData).filter(
+    (k) => k.startsWith("analytics_") && k.length === 20
+  );
+
+  dateKeys.forEach((key) => {
+    const dateStr = key.replace("analytics_", "");
+    const entry = allData[key];
+    if (!entry) return;
+
+    let include = false;
+
+    if (filter === "today") {
+      include = dateStr === todayDateStr;
+    } else if (filter === "week") {
+      const entryDate = new Date(dateStr + "T00:00:00");
+      const diffDays = (now - entryDate) / (1000 * 60 * 60 * 24);
+      include = diffDays >= 0 && diffDays <= 7;
+    } else if (filter === "month") {
+      const currentMonth = todayDateStr.substring(0, 7); // 'YYYY-MM'
+      include = dateStr.startsWith(currentMonth);
+    } else if (filter === "year") {
+      const currentYear = todayDateStr.substring(0, 4); // 'YYYY'
+      include = dateStr.startsWith(currentYear);
+    } else if (filter === "all") {
+      include = true;
+    }
+
+    if (include) {
+      const entryTime = entry.totalTime || 0;
+      totalTime += entryTime;
+      distractions += entry.distractions || 0;
+      dailyHistory[dateStr] = (dailyHistory[dateStr] || 0) + entryTime;
+
+      if (entry.domains) {
+        for (const [domain, sec] of Object.entries(entry.domains)) {
+          domains[domain] = (domains[domain] || 0) + sec;
+        }
+      }
+    }
+  });
+
+  const allTimeTotal = Math.max(allData.allTimeTotal || 0, totalTime);
+
+  return {
+    filter,
+    totalTime,
+    distractions,
+    domains,
+    dailyHistory,
+    allTimeTotal,
+  };
+}
+
+/**
+ * Menghasilkan SVG Donut Chart modern berdasarkan domain teratas
+ */
+function generateDonutChartSvg(sortedDomains, totalTime) {
+  if (sortedDomains.length === 0 || totalTime <= 0) {
+    return `
+      <div class="empty-chart-state" style="text-align: center; padding: 24px 10px; color: var(--text-muted, #64748b); font-size: 12px;">
+        <div style="font-size: 28px; margin-bottom: 6px;">📊</div>
+        Belum ada data aktivitas untuk periode ini.
+      </div>
+    `;
+  }
+
+  const size = 140;
+  const center = size / 2;
+  const radius = 52;
+  const strokeWidth = 16;
+  const circumference = 2 * Math.PI * radius;
+
+  // Ambil top 5 domain, sisanya digabung ke 'Lainnya'
+  const topSegments = [];
+  let accountedTime = 0;
+  sortedDomains.slice(0, 5).forEach(([dom, sec], idx) => {
+    topSegments.push({
+      domain: dom,
+      time: sec,
+      color: PALETTE[idx % PALETTE.length],
+      percent: (sec / totalTime) * 100,
+    });
+    accountedTime += sec;
+  });
+
+  const otherTime = totalTime - accountedTime;
+  if (otherTime > 0 && sortedDomains.length > 5) {
+    topSegments.push({
+      domain: "Lainnya",
+      time: otherTime,
+      color: PALETTE[PALETTE.length - 1],
+      percent: (otherTime / totalTime) * 100,
+    });
+  }
+
+  let accumulatedPercent = 0;
+  const svgCircles = topSegments.map((seg) => {
+    const strokeDash = (seg.percent / 100) * circumference;
+    const strokeDashoffset = -(accumulatedPercent / 100) * circumference;
+    accumulatedPercent += seg.percent;
+
+    return `
+      <circle
+        cx="${center}"
+        cy="${center}"
+        r="${radius}"
+        fill="transparent"
+        stroke="${seg.color}"
+        stroke-width="${strokeWidth}"
+        stroke-dasharray="${strokeDash} ${circumference}"
+        stroke-dashoffset="${strokeDashoffset}"
+        style="transition: stroke-dasharray 0.4s ease, stroke-dashoffset 0.4s ease;"
+      >
+        <title>${seg.domain}: ${formatTime(seg.time)} (${Math.round(seg.percent)}%)</title>
+      </circle>
+    `;
+  }).join("");
+
+  const formattedTotal = formatTime(totalTime);
+
+  // SVG Chart + Legend Grid
+  const legendHtml = topSegments.map((seg) => `
+    <div class="chart-legend-item" style="display: flex; align-items: center; gap: 5px; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+      <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background-color: ${seg.color}; flex-shrink: 0;"></span>
+      <span style="max-width: 80px; overflow: hidden; text-overflow: ellipsis; color: var(--text-main, #334155);" title="${seg.domain}">${seg.domain}</span>
+      <span style="color: var(--text-muted, #64748b); font-size: 10px;">${Math.round(seg.percent)}%</span>
+    </div>
+  `).join("");
+
+  return `
+    <div style="display: flex; flex-direction: column; align-items: center; gap: 10px; margin: 8px 0;">
+      <div style="position: relative; width: ${size}px; height: ${size}px;">
+        <svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" style="transform: rotate(-90deg); border-radius: 50%;">
+          <circle
+            cx="${center}"
+            cy="${center}"
+            r="${radius}"
+            fill="transparent"
+            stroke="var(--border-color, #e2e8f0)"
+            stroke-width="${strokeWidth}"
+          />
+          ${svgCircles}
+        </svg>
+        <div style="position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; text-align: center;">
+          <span style="font-size: 14px; font-weight: 700; color: var(--text-main, #334155);">${formattedTotal}</span>
+          <span style="font-size: 9px; color: var(--text-muted, #64748b); text-transform: uppercase; letter-spacing: 0.5px;">Waktu</span>
+        </div>
+      </div>
+      <div class="chart-legend-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px 10px; width: 100%;">
+        ${legendHtml}
+      </div>
+    </div>
+  `;
+}
+
+/**
+ * Render visual time analytics
+ * @param {'today' | 'week' | 'month' | 'year' | 'all'} [timeframe='today']
+ */
+export async function renderTimeAnalytics(timeframe = "today") {
   const statTodayTime = document.getElementById("statTodayTime");
   const statAllTime = document.getElementById("statAllTime");
   const statDistractions = document.getElementById("statDistractions");
   const domainRankingEl = document.getElementById("domainRanking");
+  const chartContainer = document.getElementById("analyticsChartContainer");
+  const statTimeframeLabel = document.getElementById("statTimeframeLabel");
+  const topDomainStat = document.getElementById("statTopDomain");
 
-  if (!statTodayTime || !statAllTime || !statDistractions || !domainRankingEl) return;
+  const data = await getAggregatedAnalytics(timeframe);
 
-  const todayKey = getTodayKey();
-
-  const data = await chrome.storage.local.get([todayKey, "allTimeTotal"]);
-  const todayData = data[todayKey] || {
-    totalTime: 0,
-    domains: {},
-    distractions: 0,
+  const filterLabels = {
+    today: "Waktu (Hari Ini)",
+    week: "Waktu (7 Hari)",
+    month: "Waktu (Bulan Ini)",
+    year: "Waktu (Tahun Ini)",
+    all: "Total Keseluruhan",
   };
-  const allTimeTotal = data.allTimeTotal || 0;
 
-  // Injeksi metrik ke Stat Card
-  statTodayTime.innerText = formatTime(todayData.totalTime);
-  statAllTime.innerText = formatTime(allTimeTotal);
-  statDistractions.innerText = todayData.distractions || 0;
-
-  // Render Tabel Ranking Domain
-  domainRankingEl.innerHTML = "";
-
-  if (Object.keys(todayData.domains).length === 0) {
-    domainRankingEl.innerHTML = `<li class="ranking-item" style="justify-content:center; color:#999;">Aktivitas browsing belum terekam hari ini.</li>`;
-    return;
+  if (statTimeframeLabel) {
+    statTimeframeLabel.innerText = filterLabels[timeframe] || "Waktu Pemakaian";
   }
 
-  const sortedDomains = Object.entries(todayData.domains).sort(
-    ([, timeA], [, timeB]) => timeB - timeA,
+  // Update Stat Cards
+  if (statTodayTime) {
+    statTodayTime.innerText = formatTime(data.totalTime);
+  }
+  if (statAllTime) {
+    statAllTime.innerText = formatTime(data.allTimeTotal);
+  }
+  if (statDistractions) {
+    statDistractions.innerText = data.distractions;
+  }
+
+  // Urutkan domain berdasarkan durasi menurun
+  const sortedDomains = Object.entries(data.domains).sort(
+    ([, timeA], [, timeB]) => timeB - timeA
   );
-  sortedDomains.forEach(([domain, time]) => {
-    const li = document.createElement("li");
-    li.className = "ranking-item";
-    li.innerHTML = `<span class="domain-name">${domain}</span><span class="domain-time">${formatTime(time)}</span>`;
-    domainRankingEl.appendChild(li);
+
+  if (topDomainStat) {
+    if (sortedDomains.length > 0) {
+      topDomainStat.innerText = sortedDomains[0][0];
+    } else {
+      topDomainStat.innerText = "-";
+    }
+  }
+
+  // Render Chart Container
+  if (chartContainer) {
+    chartContainer.innerHTML = generateDonutChartSvg(sortedDomains, data.totalTime);
+  }
+
+  // Render Domain Ranking
+  if (domainRankingEl) {
+    domainRankingEl.innerHTML = "";
+
+    if (sortedDomains.length === 0) {
+      domainRankingEl.innerHTML = `
+        <li class="ranking-item" style="justify-content: center; color: var(--text-muted, #94a3b8); padding: 14px 0; font-size: 13px; text-align: center; list-style: none;">
+          Belum ada aktivitas terekam.
+        </li>`;
+      return;
+    }
+
+    const totalSecs = data.totalTime || 1;
+
+    sortedDomains.forEach(([domain, time], idx) => {
+      const percentage = Math.round((time / totalSecs) * 100);
+      const color = PALETTE[idx % PALETTE.length];
+
+      const li = document.createElement("li");
+      li.className = "ranking-item";
+      li.style.cssText = "display: flex; flex-direction: column; gap: 4px; padding: 8px 0; border-bottom: 1px dashed var(--border-color, #e2e8f0); list-style: none;";
+
+      li.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+          <div style="display: flex; align-items: center; gap: 6px; overflow: hidden;">
+            <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background-color: ${color}; flex-shrink: 0;"></span>
+            <span class="domain-name" style="font-weight: 500; font-size: 12px; color: var(--text-main, #334155); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${domain}">${domain}</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
+            <span style="font-size: 11px; font-weight: 600; color: ${color};">${percentage}%</span>
+            <span class="domain-time" style="font-size: 11px; font-family: monospace; color: var(--text-muted, #64748b);">${formatTime(time)}</span>
+          </div>
+        </div>
+        <div style="width: 100%; height: 5px; background: var(--border-color, #e2e8f0); border-radius: 999px; overflow: hidden;">
+          <div style="width: ${percentage}%; height: 100%; background: ${color}; border-radius: 999px; transition: width 0.3s ease;"></div>
+        </div>
+      `;
+      domainRankingEl.appendChild(li);
+    });
+  }
+}
+
+/**
+ * Inisialisasi event listener tombol-tombol filter periode
+ */
+export function initTimeframeFilters(onFilterChange) {
+  const filterBtns = document.querySelectorAll(".timeframe-filter-btn");
+  if (!filterBtns || filterBtns.length === 0) return;
+
+  filterBtns.forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const filter = btn.getAttribute("data-filter") || "today";
+
+      filterBtns.forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+
+      await renderTimeAnalytics(filter);
+      if (typeof onFilterChange === "function") {
+        onFilterChange(filter);
+      }
+    });
   });
 }
+

@@ -206,6 +206,46 @@
     }
 
     /* ==========================================
+         TIMEFRAME FILTER PILLS
+         ========================================== */
+    .filter-pills {
+      display: flex;
+      gap: 8px;
+      background: var(--bg-card);
+      padding: 6px;
+      border-radius: 10px;
+      border: 1px solid var(--border-color);
+      box-shadow: var(--card-shadow);
+      margin-bottom: 20px;
+      overflow-x: auto;
+    }
+
+    .timeframe-filter-btn {
+      flex: 1;
+      padding: 8px 14px;
+      font-size: 13px;
+      font-weight: 600;
+      background: transparent;
+      color: var(--text-muted);
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      margin: 0;
+      white-space: nowrap;
+      transition: all 0.2s ease;
+    }
+
+    .timeframe-filter-btn:hover {
+      color: var(--text-main);
+      background-color: var(--border-color);
+    }
+
+    .timeframe-filter-btn.active {
+      background-color: var(--primary);
+      color: #ffffff;
+    }
+
+    /* ==========================================
          QUOTES LIST COMPONENT
          ========================================== */
     .quote-card {
@@ -325,9 +365,18 @@
       </div>
     </div>
 
+    <!-- Filter Periode (Pills) -->
+    <div class="filter-pills">
+      <button class="timeframe-filter-btn active" data-filter="today">Hari Ini</button>
+      <button class="timeframe-filter-btn" data-filter="week">Mingguan (7 Hari)</button>
+      <button class="timeframe-filter-btn" data-filter="month">Bulanan</button>
+      <button class="timeframe-filter-btn" data-filter="year">Tahunan</button>
+      <button class="timeframe-filter-btn" data-filter="all">Total Semua</button>
+    </div>
+
     <div class="dashboard-grid">
       <div class="stat-card">
-        <div class="stat-label">Waktu Internet (Hari Ini)</div>
+        <div class="stat-label" id="statTimeframeLabel">Waktu Internet (Hari Ini)</div>
         <div class="stat-value" id="statTodayTime">0j 0m</div>
       </div>
       <div class="stat-card">
@@ -340,9 +389,15 @@
       </div>
     </div>
 
-    <div class="domain-list-container">
-      <h3>Alokasi Domain</h3>
-      <ul id="domainRanking" class="ranking-list"></ul>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 15px; margin-bottom: 25px;">
+      <div class="domain-list-container">
+        <h3>Visualisasi Distribusi Waktu</h3>
+        <div id="analyticsChartContainer"></div>
+      </div>
+      <div class="domain-list-container">
+        <h3>Alokasi Domain</h3>
+        <ul id="domainRanking" class="ranking-list"></ul>
+      </div>
     </div>
 
     <div class="quotes-section">

@@ -23,7 +23,7 @@ export function applyPomodoroOverlay() {
     font-size: 14px; color: black; box-shadow: 4px 4px 0px rgba(0,0,0,0.2);
     max-width: 250px; word-wrap: break-word; text-align: center;
     opacity: 0; transform: translateY(10px); transition: all 0.3s ease;
-    line-height: 1.4;
+    line-height: 1.4; pointer-events: auto;
   `;
 
     const textNode = document.createElement('span');
@@ -41,7 +41,30 @@ export function applyPomodoroOverlay() {
 
     // Karakter
     const character = document.createElement('img');
-    character.style.cssText = `object-fit: contain; transition: width 0.2s ease;`;
+    character.style.cssText = `object-fit: contain; transition: width 0.2s ease; pointer-events: auto;`;
+
+    // Sembunyikan widget sepenuhnya saat di-hover dan biarkan klik tembus
+    container.addEventListener('mouseover', () => {
+        container.style.opacity = '0';
+        bubble.style.pointerEvents = 'none';
+        character.style.pointerEvents = 'none';
+
+        const checkMouseLeave = (e) => {
+            const rect = container.getBoundingClientRect();
+            // Beri sedikit padding (20px) agar tidak terlalu sensitif
+            const pad = 20;
+            if (e.clientX < rect.left - pad || e.clientX > rect.right + pad || 
+                e.clientY < rect.top - pad || e.clientY > rect.bottom + pad) {
+                
+                container.style.opacity = '1';
+                bubble.style.pointerEvents = 'auto';
+                character.style.pointerEvents = 'auto';
+                document.removeEventListener('mousemove', checkMouseLeave);
+            }
+        };
+        
+        document.addEventListener('mousemove', checkMouseLeave);
+    });
 
     container.appendChild(bubble);
     container.appendChild(character);

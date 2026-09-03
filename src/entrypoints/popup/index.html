@@ -1,44 +1,166 @@
 <!doctype html>
-<html>
+<html lang="id">
 
 <head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Fokus & Clipboard</title>
   <style>
-    body {
-      font-family:
-        system-ui,
-        -apple-system,
-        sans-serif;
-      width: 250px;
-      padding: 16px;
-      color: #333;
+    /* ==========================================
+       DESIGN SYSTEM & TEMA CSS VARIABLES
+       ========================================== */
+    :root {
+      --bg-body: #f8fafc;
+      --bg-card: #ffffff;
+      --text-main: #334155;
+      --text-muted: #64748b;
+      --border-color: #e2e8f0;
+      --primary: #3b82f6;
+      --primary-hover: #2563eb;
+      --primary-subtle: #eff6ff;
+      --danger: #ef4444;
+      --danger-hover: #dc2626;
+      --success: #10b981;
+      --success-hover: #059669;
+      --card-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
     }
 
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg-body: #0f172a;
+        --bg-card: #1e293b;
+        --text-main: #f8fafc;
+        --text-muted: #94a3b8;
+        --border-color: #334155;
+        --primary: #60a5fa;
+        --primary-hover: #3b82f6;
+        --primary-subtle: #1e3a8a33;
+        --danger: #f87171;
+        --danger-hover: #ef4444;
+        --success: #34d399;
+        --success-hover: #10b981;
+        --card-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.4);
+      }
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      width: 350px;
+      margin: 0;
+      padding: 14px;
+      background-color: var(--bg-body);
+      color: var(--text-main);
+      line-height: 1.5;
+      user-select: none;
+    }
+
+    /* ==========================================
+       TAB NAVIGATION
+       ========================================== */
+    .tab-nav {
+      display: flex;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      padding: 3px;
+      margin-bottom: 14px;
+      box-shadow: var(--card-shadow);
+    }
+
+    .tab-btn {
+      flex: 1;
+      padding: 8px 12px;
+      font-size: 12px;
+      font-weight: 600;
+      border: none;
+      background: transparent;
+      color: var(--text-muted);
+      border-radius: 7px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: all 0.2s ease;
+      margin: 0;
+    }
+
+    .tab-btn:hover {
+      color: var(--text-main);
+    }
+
+    .tab-btn.active {
+      background-color: var(--primary);
+      color: #ffffff;
+      box-shadow: 0 2px 4px rgba(59, 130, 246, 0.25);
+    }
+
+    .tab-pane {
+      display: none;
+    }
+
+    .tab-pane.active {
+      display: block;
+      animation: fadeIn 0.2s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(3px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ==========================================
+       FORM & CONTROLS STYLES
+       ========================================== */
     .row {
-      margin-bottom: 16px;
+      margin-bottom: 12px;
     }
 
     label {
       display: block;
-      font-size: 13px;
-      margin-bottom: 6px;
-      font-weight: 500;
+      font-size: 12px;
+      margin-bottom: 5px;
+      font-weight: 600;
+      color: var(--text-main);
     }
 
     .checkbox-label {
       display: flex;
       align-items: center;
       gap: 8px;
-      margin-bottom: 0;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+    }
+
+    .checkbox-label input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      cursor: pointer;
+      accent-color: var(--primary);
     }
 
     input[type="number"],
     textarea {
       width: 100%;
-      padding: 8px;
-      box-sizing: border-box;
-      border: 1px solid #ccc;
-      border-radius: 4px;
+      padding: 8px 10px;
+      background-color: var(--bg-card);
+      color: var(--text-main);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
       font-family: monospace;
+      font-size: 12px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    input[type="number"]:focus,
+    textarea:focus {
+      border-color: var(--primary);
     }
 
     textarea {
@@ -47,110 +169,332 @@
 
     button {
       width: 100%;
-      padding: 10px;
-      background-color: #0056b3;
+      padding: 9px;
+      background-color: var(--primary);
       color: white;
       border: none;
-      border-radius: 4px;
+      border-radius: 8px;
       cursor: pointer;
-      font-weight: bold;
+      font-size: 12px;
+      font-weight: 600;
       margin-bottom: 8px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: background-color 0.2s, transform 0.1s;
     }
 
     button:hover {
-      background-color: #004494;
+      background-color: var(--primary-hover);
+    }
+
+    button:active {
+      transform: scale(0.98);
     }
 
     .btn-success {
-      background-color: #198754;
+      background-color: var(--success);
     }
 
     .btn-success:hover {
-      background-color: #157347;
+      background-color: var(--success-hover);
+    }
+
+    .btn-secondary {
+      background-color: var(--bg-card);
+      color: var(--text-main);
+      border: 1px solid var(--border-color);
+    }
+
+    .btn-secondary:hover {
+      background-color: var(--border-color);
     }
 
     hr {
       border: 0;
-      border-top: 1px solid #eaeaea;
-      margin: 16px 0;
+      border-top: 1px solid var(--border-color);
+      margin: 14px 0;
+    }
+
+    /* ==========================================
+       ANALYTICS DASHBOARD STYLES
+       ========================================== */
+    .filter-pills {
+      display: flex;
+      gap: 4px;
+      background: var(--bg-card);
+      padding: 3px;
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+      margin-bottom: 12px;
+      overflow-x: auto;
+    }
+
+    .timeframe-filter-btn {
+      flex: 1;
+      padding: 5px 6px;
+      font-size: 10px;
+      font-weight: 600;
+      background: transparent;
+      color: var(--text-muted);
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      margin-bottom: 0;
+      white-space: nowrap;
+      transition: all 0.2s ease;
+    }
+
+    .timeframe-filter-btn:hover {
+      color: var(--text-main);
+      background-color: var(--border-color);
+    }
+
+    .timeframe-filter-btn.active {
+      background-color: var(--primary);
+      color: #ffffff;
+    }
+
+    .stat-grid-compact {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .stat-box {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      padding: 10px 8px;
+      text-align: center;
+      box-shadow: var(--card-shadow);
+    }
+
+    .stat-box .stat-label {
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-muted);
+      font-weight: 600;
+      margin-bottom: 3px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .stat-box .stat-value {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--primary);
+      line-height: 1.2;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .stat-box .stat-value.danger {
+      color: var(--danger);
+    }
+
+    .stat-box .stat-value.small {
+      font-size: 11px;
+      font-family: monospace;
+    }
+
+    .analytics-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      padding: 12px;
+      margin-bottom: 12px;
+      box-shadow: var(--card-shadow);
+    }
+
+    .analytics-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .analytics-card-title {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text-main);
+      margin: 0;
+    }
+
+    .ranking-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      max-height: 180px;
+      overflow-y: auto;
+    }
+
+    /* Scrollbar halus */
+    .ranking-list::-webkit-scrollbar {
+      width: 4px;
+    }
+    .ranking-list::-webkit-scrollbar-thumb {
+      background: var(--border-color);
+      border-radius: 4px;
     }
   </style>
 </head>
 
 <body>
-  <div class="row">
-    <label class="checkbox-label">
-      <input type="checkbox" id="enabled" />
-      Aktifkan Mode Fokus
-    </label>
+  <!-- Tab Navigation -->
+  <div class="tab-nav">
+    <button class="tab-btn active" id="tabBtnAnalytics" data-target="tabAnalytics">
+      📊 Dashboard Analitik
+    </button>
+    <button class="tab-btn" id="tabBtnControls" data-target="tabControls">
+      ⚡ Kontrol & Fitur
+    </button>
   </div>
 
-  <div class="row">
-    <label class="checkbox-label">
-      <input type="checkbox" id="cleanerEnabled" />
-      Aktifkan Link Cleaner (Hapus Tracker)
-    </label>
-  </div>
-
-  <div class="row">
-    <label for="maxTabs">Batas Maksimal Tab</label>
-    <input type="number" id="maxTabs" min="1" />
-  </div>
-
-  <div class="row">
-    <label for="blockedSites">Blokir Situs (pisahkan dengan koma atau baris baru)</label>
-    <textarea id="blockedSites" rows="4" placeholder="facebook.com&#10;twitter.com"></textarea>
-  </div>
-
-  <hr>
-  <div class="row">
-    <label class="checkbox-label">
-      <input type="checkbox" id="darkEnabled" />
-      Aktifkan Dark Mode
-    </label>
-  </div>
-
-  <div class="row">
-    <label for="darkExcluded">Pengecualian Dark Mode (Website Terang)</label>
-    <textarea id="darkExcluded" rows="3" placeholder="youtube.com&#10;github.com"></textarea>
-  </div>
-  <hr>
-  <div class="row" style="margin-bottom: 12px;">
-    <label>Responsive Tester (Buka di Window Baru)</label>
-    <div id="responsiveTesterContainer" style="display: flex; gap: 6px; margin-top: 6px;">
-      <button data-device="mobile" style="margin: 0; background-color: #6366f1; padding: 8px 4px; font-size: 11px;">
-        Mobile</button>
-      <button data-device="tablet" style="margin: 0; background-color: #8b5cf6; padding: 8px 4px; font-size: 11px;">
-        Tablet</button>
-      <button data-device="desktop" style="margin: 0; background-color: #a855f7; padding: 8px 4px; font-size: 11px;">
-        Desktop</button>
+  <!-- PANE 1: KONTROL & FITUR -->
+  <div class="tab-pane" id="tabControls">
+    <div class="row">
+      <label class="checkbox-label">
+        <input type="checkbox" id="enabled" />
+        Aktifkan Mode Fokus
+      </label>
     </div>
+
+    <div class="row">
+      <label class="checkbox-label">
+        <input type="checkbox" id="cleanerEnabled" />
+        Aktifkan Link Cleaner (Hapus Tracker)
+      </label>
+    </div>
+
+    <div class="row">
+      <label for="maxTabs">Batas Maksimal Tab</label>
+      <input type="number" id="maxTabs" min="1" />
+    </div>
+
+    <div class="row">
+      <label for="blockedSites">Blokir Situs (pisahkan dengan baris baru/koma)</label>
+      <textarea id="blockedSites" rows="3" placeholder="facebook.com&#10;twitter.com"></textarea>
+    </div>
+
+    <hr>
+    <div class="row">
+      <label class="checkbox-label">
+        <input type="checkbox" id="darkEnabled" />
+        Aktifkan Dark Mode
+      </label>
+    </div>
+
+    <div class="row">
+      <label for="darkExcluded">Pengecualian Dark Mode (Website Terang)</label>
+      <textarea id="darkExcluded" rows="2" placeholder="youtube.com&#10;github.com"></textarea>
+    </div>
+
+    <hr>
+    <div class="row" style="margin-bottom: 12px;">
+      <label>Responsive Tester (Buka di Window Baru)</label>
+      <div id="responsiveTesterContainer" style="display: flex; gap: 6px; margin-top: 6px;">
+        <button data-device="mobile" style="margin: 0; background-color: #6366f1; padding: 7px 4px; font-size: 11px;">
+          📱 Mobile
+        </button>
+        <button data-device="tablet" style="margin: 0; background-color: #8b5cf6; padding: 7px 4px; font-size: 11px;">
+          💻 Tablet
+        </button>
+        <button data-device="desktop" style="margin: 0; background-color: #a855f7; padding: 7px 4px; font-size: 11px;">
+          🖥️ Desktop
+        </button>
+      </div>
+    </div>
+
+    <hr>
+    <!-- Pomodoro Widget -->
+    <div class="row" style="text-align: center; background: var(--bg-card); padding: 12px; border-radius: 10px; border: 1px solid var(--border-color); box-shadow: var(--card-shadow);">
+      <div style="font-size: 12px; font-weight: 600; margin-bottom: 4px;" id="pomoStatus">💤 Pomodoro Nonaktif</div>
+      <div style="font-family: monospace; font-size: 28px; font-weight: 700; margin-bottom: 8px; color: var(--text-main);" id="pomoTimer">25:00</div>
+
+      <button id="startPomoBtn" class="btn-success" style="margin-bottom: 0;">🔥 Mulai Fokus</button>
+      <button id="stopPomoBtn" style="background-color: var(--danger); display: none; margin-bottom: 0;">🛑 Berhenti</button>
+    </div>
+
+    <hr>
+    <button id="saveBtn">💾 Simpan Pengaturan</button>
+    <button id="copyMdBtn" class="btn-success">📝 Copy Blog as .md</button>
+    <button id="pasteHtmlBtn" class="btn-secondary" style="color: #0284c7;">
+      🌐 Paste Code as .html
+    </button>
+    <button id="copyLinksBtn" class="btn-secondary" style="color: #7c3aed;">
+      🔗 Copy Semua Link
+    </button>
+    <button id="openDashboardBtn" class="btn-secondary">
+      📖 Buka Dashboard Kutipan
+    </button>
   </div>
-  <hr>
-  <div class="row"
-    style="text-align: center; background: #f8f9fa; padding: 12px; border-radius: 8px; border: 1px solid #ccc;">
-    <h4 style="margin: 0 0 5px 0; font-size: 14px;" id="pomoStatus">💤 Pomodoro Nonaktif</h4>
-    <h2 style="margin: 0 0 12px 0; font-family: monospace; font-size: 32px;" id="pomoTimer">25:00</h2>
 
-    <button id="startPomoBtn" class="btn-success" style="margin-bottom: 0;">Mulai Fokus</button>
-    <button id="stopPomoBtn" style="background-color: #dc3545; display: none; margin-bottom: 0;">Berhenti</button>
+  <!-- PANE 2: DASHBOARD ANALITIK -->
+  <div class="tab-pane active" id="tabAnalytics">
+    <!-- Header & Refresh -->
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+      <span style="font-size: 13px; font-weight: 700; color: var(--text-main);">📈 Ringkasan Aktivitas</span>
+      <button id="refreshAnalyticsBtn" style="width: auto; padding: 4px 10px; font-size: 11px; margin: 0; background-color: var(--bg-card); color: var(--text-main); border: 1px solid var(--border-color);">
+        🔄 Refresh
+      </button>
+    </div>
+
+    <!-- Filter Periode (Pills) -->
+    <div class="filter-pills">
+      <button class="timeframe-filter-btn active" data-filter="today">Hari Ini</button>
+      <button class="timeframe-filter-btn" data-filter="week">Mingguan</button>
+      <button class="timeframe-filter-btn" data-filter="month">Bulanan</button>
+      <button class="timeframe-filter-btn" data-filter="year">Tahunan</button>
+      <button class="timeframe-filter-btn" data-filter="all">Total</button>
+    </div>
+
+    <!-- Stat Cards Grid -->
+    <div class="stat-grid-compact">
+      <div class="stat-box">
+        <div class="stat-label" id="statTimeframeLabel">Waktu</div>
+        <div class="stat-value" id="statTodayTime">0m</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">Distraksi</div>
+        <div class="stat-value danger" id="statDistractions">0</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">Top Situs</div>
+        <div class="stat-value small" id="statTopDomain">-</div>
+      </div>
+    </div>
+
+    <!-- Visual Chart Card -->
+    <div class="analytics-card">
+      <div class="analytics-card-header">
+        <h4 class="analytics-card-title">📊 Visualisasi Distribusi Waktu</h4>
+      </div>
+      <div id="analyticsChartContainer">
+        <!-- SVG Donut Chart dynamically rendered here -->
+      </div>
+    </div>
+
+    <!-- Domain Allocation Card -->
+    <div class="analytics-card">
+      <div class="analytics-card-header">
+        <h4 class="analytics-card-title">🌐 Alokasi Domain Teratas</h4>
+      </div>
+      <ul id="domainRanking" class="ranking-list">
+        <!-- List item domain rendered here -->
+      </ul>
+    </div>
+
+    <!-- Shortcut ke Options Page -->
+    <button id="openFullAnalyticsBtn" class="btn-secondary" style="margin-top: 6px;">
+      🚀 Buka Dashboard Lengkap di Tab Baru
+    </button>
   </div>
-  <hr>
-  <button id="saveBtn">Simpan Pengaturan</button>
-
-  <button id="copyMdBtn" class="btn-success">Copy Blog as .md</button>
-
-  <button id="pasteHtmlBtn" class="btn-secondary" style="background-color: #0dcaf0; color: #000; margin-top: 8px">
-    Paste Code as .html
-  </button>
-
-  <button id="copyLinksBtn" class="btn-secondary" style="background-color: #6f42c1; color: white; margin-top: 8px">
-    Copy Semua Link
-  </button>
-
-  <button id="openDashboardBtn" class="btn-secondary" style="background-color: #6c757d; color: white; margin-top: 8px">
-    Buka Dashboard Kutipan
-  </button>
 
   <script type="module" src="index.js"></script>
 </body>
