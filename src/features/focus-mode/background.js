@@ -30,7 +30,7 @@ export function initFocusMode() {
     
     if (isUrlBlocked(changeInfo.url)) {
       chrome.tabs.remove(tabId);
-      await recordDistractionAttempt(); 
+      await recordDistractionAttempt(changeInfo.url);
     }
   });
 }

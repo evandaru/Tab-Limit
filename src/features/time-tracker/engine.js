@@ -3,21 +3,33 @@ import { getHostname } from "../../shared/utils/url-validator.js";
 
 let activeSession = { domain: null, startTime: null, tabId: null };
 
-export async function recordDistractionAttempt() {
+export async function recordDistractionAttempt(blockedUrl) {
   const todayKey = getTodayKey();
   const data = await chrome.storage.local.get(todayKey);
   const todayData = data[todayKey] || {
     totalTime: 0,
     domains: {},
     distractions: 0,
+    distractionSites: {},
     tabsOpened: 0,
     tabsClosed: 0,
     peakTabs: 0,
     hourly: {},
     firstSeen: null,
     lastSeen: null,
+    idleSecs: 0,
+    idleSince: null,
   };
   todayData.distractions += 1;
+  if (blockedUrl) {
+    const host = getHostname(blockedUrl);
+    if (host) {
+      if (!todayData.distractionSites || typeof todayData.distractionSites !== "object") {
+        todayData.distractionSites = {};
+      }
+      todayData.distractionSites[host] = (todayData.distractionSites[host] || 0) + 1;
+    }
+  }
   await chrome.storage.local.set({ [todayKey]: todayData });
 }
 
@@ -35,12 +47,15 @@ async function commitSessionTime() {
       totalTime: 0,
       domains: {},
       distractions: 0,
+      distractionSites: {},
       tabsOpened: 0,
       tabsClosed: 0,
       peakTabs: 0,
       hourly: {},
       firstSeen: null,
       lastSeen: null,
+      idleSecs: 0,
+      idleSince: null,
     };
     const allTimeTotal = (data.allTimeTotal || 0) + durationSecs;
 

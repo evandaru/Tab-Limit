@@ -17,12 +17,15 @@ async function bumpTabCounter(field) {
     totalTime: 0,
     domains: {},
     distractions: 0,
+    distractionSites: {},
     tabsOpened: 0,
     tabsClosed: 0,
     peakTabs: 0,
     hourly: {},
     firstSeen: null,
     lastSeen: null,
+    idleSecs: 0,
+    idleSince: null,
   };
 
   // Backward-compat: old data lacks tab/rhythm fields
@@ -42,6 +45,12 @@ async function bumpTabCounter(field) {
     [todayKey]: todayData,
     [allTimeKey]: allTimeVal,
   });
+
+  // Glanceable badge: today's opened-tab count on the extension icon
+  try {
+    await chrome.action.setBadgeText({ text: String(todayData.tabsOpened) });
+    await chrome.action.setBadgeBackgroundColor({ color: "#3b82f6" });
+  } catch (e) {}
 }
 
 export async function recordTabOpened() {

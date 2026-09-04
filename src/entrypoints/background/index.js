@@ -2,6 +2,8 @@ import { initFocusMode } from "../../features/focus-mode/background.js";
 import { initTimeTracker } from "../../features/time-tracker/engine.js";
 import { initTabCounter } from "../../features/tab-counter/engine.js";
 import { initActivityRhythm } from "../../features/activity-rhythm/engine.js";
+import { initPresence } from "../../features/presence/engine.js";
+import { initRetention } from "../../features/retention/engine.js";
 import { initContextMenus } from "../../features/quotes-manager/context-menu.js";
 import { initDarkMode } from "../../features/dark-mode/background.js";
 import { initVideoSpeedController } from "../../features/video-speed/background.js";
@@ -16,6 +18,8 @@ function bootstrapServices() {
   initTimeTracker();
   initTabCounter();
   initActivityRhythm();
+  initPresence();
+  initRetention();
   initContextMenus();
   initDarkMode();
   initVideoSpeedController();

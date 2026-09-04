@@ -34,12 +34,15 @@ export async function recordHeartbeat() {
       totalTime: 0,
       domains: {},
       distractions: 0,
+      distractionSites: {},
       tabsOpened: 0,
       tabsClosed: 0,
       peakTabs: 0,
       hourly: {},
       firstSeen: null,
       lastSeen: null,
+      idleSecs: 0,
+      idleSince: null,
     }
   );
 

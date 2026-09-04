@@ -14,7 +14,8 @@
         "notifications",
         "unlimitedStorage",
         "bookmarks",
-        "topSites"
+        "topSites",
+        "idle"
     ],
     "host_permissions": [
         "*://*/*"

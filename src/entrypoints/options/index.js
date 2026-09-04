@@ -4,10 +4,12 @@ import {
   initTimeframeFilters,
 } from "../../features/time-tracker/analytics-ui.js";
 import { initPomodoroDashboard } from "../../features/pomodoro/dashboard-ui.js";
+import { initRetentionDashboard } from "../../features/retention/dashboard-ui.js";
 
 document.addEventListener("DOMContentLoaded", async () => {
   initDashboardUI();
   initPomodoroDashboard();
+  initRetentionDashboard();
   initTimeframeFilters();
 
   await renderQuotes();

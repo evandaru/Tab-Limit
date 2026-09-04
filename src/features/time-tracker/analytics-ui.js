@@ -28,8 +28,10 @@ export async function getAggregatedAnalytics(filter = "today") {
   let firstSeen = null;
   let lastSeen = null;
   let activeDays = 0;
+  let idleSecs = 0;
   const hourly = {};
   const domains = {};
+  const distractionSites = {};
   const dailyHistory = {}; // dateStr -> { totalTime, tabsOpened, tabsClosed, peakTabs }
 
   // Collect all analytics_YYYY-MM-DD entries
@@ -68,6 +70,13 @@ export async function getAggregatedAnalytics(filter = "today") {
       distractions += entry.distractions || 0;
       tabsOpened += entryOpened;
       tabsClosed += entryClosed;
+      idleSecs += entry.idleSecs || 0;
+
+      if (entry.distractionSites && typeof entry.distractionSites === "object") {
+        for (const [site, count] of Object.entries(entry.distractionSites)) {
+          distractionSites[site] = (distractionSites[site] || 0) + (count || 0);
+        }
+      }
 
       if (typeof entry.peakTabs === "number" && entry.peakTabs > peakTabs) {
         peakTabs = entry.peakTabs;
@@ -138,6 +147,48 @@ export async function getAggregatedAnalytics(filter = "today") {
     cursor.setDate(cursor.getDate() - 1);
   }
 
+  // Weekday pattern: average online seconds per Mon..Sun across all recorded days.
+  // Computed, no extra storage needed.
+  const weekdayTotals = [0, 0, 0, 0, 0, 0, 0]; // Mon..Sun
+  const weekdayCounts = [0, 0, 0, 0, 0, 0, 0];
+  dateKeys.forEach((key) => {
+    const dateStr = key.replace("analytics_", "");
+    const entry = allData[key];
+    if (!entry) return;
+    const dow = new Date(dateStr + "T00:00:00").getDay(); // 0=Sun..6=Sat
+    const idx = (dow + 6) % 7; // Mon..Sun
+    weekdayTotals[idx] += entry.totalTime || 0;
+    weekdayCounts[idx] += 1;
+  });
+  const weekdayPattern = weekdayTotals.map((total, i) =>
+    weekdayCounts[i] > 0 ? Math.round(total / weekdayCounts[i]) : 0
+  );
+
+  // Derived insights (all computed, nothing extra stored)
+  const hoursOnline = totalTime / 3600;
+  const activeSecs = Math.max(0, totalTime - idleSecs);
+  const churnRate =
+    hoursOnline > 0
+      ? Math.round(((tabsOpened + tabsClosed) / hoursOnline) * 10) / 10
+      : 0;
+  const topOffenders = Object.entries(distractionSites)
+    .sort(([, a], [, b]) => b - a)
+    .slice(0, 3);
+
+  // Focus Score 0-100: concentrated time scores high, distractions + churn penalize.
+  let focusScore = 0;
+  if (totalTime > 0) {
+    const domainSecs = Object.values(domains);
+    const topShare =
+      domainSecs.length > 0 ? Math.max(...domainSecs) / totalTime : 0;
+    focusScore = 50 + topShare * 30;
+    focusScore -= Math.min(30, distractions * 2);
+    if (hoursOnline > 0) {
+      focusScore -= Math.min(20, ((tabsOpened + tabsClosed) / hoursOnline) * 1.5);
+    }
+    focusScore = Math.max(0, Math.min(100, Math.round(focusScore)));
+  }
+
   return {
     filter,
     totalTime,
@@ -150,6 +201,12 @@ export async function getAggregatedAnalytics(filter = "today") {
     lastSeen,
     activeDays,
     streak,
+    idleSecs,
+    activeSecs,
+    churnRate,
+    focusScore,
+    weekdayPattern,
+    topOffenders,
     domains,
     dailyHistory,
     allTimeTotal,

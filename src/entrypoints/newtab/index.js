@@ -1,4 +1,5 @@
 import { formatTime, getTodayKey } from "../../shared/utils/time-formatter.js";
+import { getAggregatedAnalytics } from "../../features/time-tracker/analytics-ui.js";
 
 // ==========================================
 // 1. LIVE CLOCK & VISIBILITY PAUSE
@@ -147,6 +148,79 @@ async function loadBrowserDashboard() {
         rhythmHeatmap.appendChild(bar);
       }
     }
+
+    // 1d. Focus Insights (computed via shared aggregator, no extra reads)
+    try {
+      const agg = await getAggregatedAnalytics("today");
+
+      const valFocusScore = document.getElementById("valFocusScore");
+      const valActiveTime = document.getElementById("valActiveTime");
+      const valChurnRate = document.getElementById("valChurnRate");
+      const valTopOffender = document.getElementById("valTopOffender");
+
+      if (valFocusScore) {
+        valFocusScore.innerText =
+          todayData.totalTime > 0 ? `${agg.focusScore} / 100` : "-";
+      }
+      if (valActiveTime) {
+        valActiveTime.innerText =
+          todayData.totalTime > 0
+            ? `${formatTime(agg.activeSecs)} active`
+            : "-";
+      }
+      if (valChurnRate) {
+        valChurnRate.innerText =
+          todayData.totalTime > 0 ? `${agg.churnRate} tabs/h` : "-";
+      }
+      if (valTopOffender) {
+        valTopOffender.innerText =
+          agg.topOffenders.length > 0
+            ? `${agg.topOffenders[0][0]} (${agg.topOffenders[0][1]}x)`
+            : "-";
+      }
+
+      // Session timeline: 24 blocks colored by hourly intensity
+      const sessionStrip = document.getElementById("sessionStrip");
+      if (sessionStrip) {
+        sessionStrip.innerHTML = "";
+        const hourly = todayData.hourly || {};
+        const maxSec = Math.max(
+          1,
+          ...Array.from({ length: 24 }, (_, h) => hourly[h] || 0)
+        );
+        for (let h = 0; h < 24; h++) {
+          const sec = hourly[h] || 0;
+          const block = document.createElement("div");
+          block.className = "session-block" + (sec > 0 ? " hot" : "");
+          block.style.opacity =
+            sec > 0 ? `${Math.max(25, Math.round((sec / maxSec) * 100))}%` : "1";
+          block.title = `${String(h).padStart(2, "0")}:00 — ${formatTime(sec)}`;
+          sessionStrip.appendChild(block);
+        }
+      }
+
+      // Weekday pattern: 7 columns Mon..Sun with average labels
+      const weekdayStrip = document.getElementById("weekdayStrip");
+      if (weekdayStrip) {
+        weekdayStrip.innerHTML = "";
+        const labels = ["M", "T", "W", "T", "F", "S", "S"];
+        const maxAvg = Math.max(1, ...agg.weekdayPattern);
+        agg.weekdayPattern.forEach((avg, i) => {
+          const col = document.createElement("div");
+          col.className = "weekday-col";
+          const bar = document.createElement("div");
+          bar.className = "weekday-bar" + (avg > 0 ? " hot" : "");
+          bar.style.height = `${Math.max(6, Math.round((avg / maxAvg) * 100))}%`;
+          bar.title = `${["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][i]} avg ${formatTime(avg)}`;
+          const lbl = document.createElement("div");
+          lbl.className = "weekday-lbl";
+          lbl.innerText = labels[i];
+          col.appendChild(bar);
+          col.appendChild(lbl);
+          weekdayStrip.appendChild(col);
+        });
+      }
+    } catch (e) {}
 
     // 2. Pomodoro status
     const pomoLabel = document.getElementById("pomoLabel");

@@ -466,6 +466,63 @@
       background: linear-gradient(180deg, #3182ce 0%, #2b6cb0 100%);
     }
 
+    /* Focus Insights: weekday strip + session timeline (pure CSS, no libs) */
+    .weekday-strip {
+      display: flex;
+      align-items: flex-end;
+      gap: 3px;
+      height: 52px;
+      padding: 6px 2px 2px 2px;
+    }
+
+    .weekday-col {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      height: 100%;
+      justify-content: flex-end;
+    }
+
+    .weekday-bar {
+      width: 100%;
+      background: var(--nt-gauge-bg);
+      border: 1px solid var(--nt-gauge-border);
+      border-radius: 1px;
+      min-height: 3px;
+    }
+
+    .weekday-bar.hot {
+      background: linear-gradient(180deg, #3182ce 0%, #2b6cb0 100%);
+    }
+
+    .weekday-lbl {
+      font-size: 8px;
+      font-weight: bold;
+      color: var(--nt-muted);
+    }
+
+    .session-strip {
+      display: flex;
+      gap: 1px;
+      height: 12px;
+      margin-top: 6px;
+      background: var(--nt-gauge-bg);
+      border: 1px solid var(--nt-gauge-border);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    .session-block {
+      flex: 1;
+      min-width: 2px;
+    }
+
+    .session-block.hot {
+      background: linear-gradient(180deg, #3182ce 0%, #2b6cb0 100%);
+    }
+
     /* Classic Retro Links */
     a.retro-link {
       color: var(--nt-link);
@@ -687,8 +744,42 @@
           </div>
         </aside>
 
-        <!-- RIGHT COLUMN: DOMAIN ALLOCATION & HISTORY -->
+        <!-- RIGHT COLUMN: DOMAIN ALLOCATION, HISTORY & INSIGHTS -->
         <section>
+          <!-- Box 0: Focus Insights (computed, zero extra storage) -->
+          <div class="retro-box">
+            <div class="retro-box-header">
+              <span>🎯 Focus Insights</span>
+              <span style="font-weight: normal; font-size: 10px;">computed live</span>
+            </div>
+            <div class="retro-box-body">
+              <div class="stat-line">
+                <span>Focus Score (Today):</span>
+                <span class="val" id="valFocusScore">-</span>
+              </div>
+              <div class="stat-line">
+                <span>Truly Active:</span>
+                <span class="val" id="valActiveTime">-</span>
+              </div>
+              <div class="stat-line">
+                <span>Tab Churn / Hour:</span>
+                <span class="val" id="valChurnRate">-</span>
+              </div>
+              <div class="stat-line">
+                <span>Top Offender:</span>
+                <span class="val danger" id="valTopOffender" style="max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">-</span>
+              </div>
+              <div style="margin-top: 8px; font-size: 10px; color: var(--nt-muted); font-weight: bold;">
+                Session Timeline (00–23)
+              </div>
+              <div class="session-strip" id="sessionStrip"></div>
+              <div style="margin-top: 8px; font-size: 10px; color: var(--nt-muted); font-weight: bold;">
+                Weekday Pattern (avg / day)
+              </div>
+              <div class="weekday-strip" id="weekdayStrip"></div>
+            </div>
+          </div>
+
           <!-- Box 1: Today's Domain Allocation -->
           <div class="retro-box">
             <div class="retro-box-header">
