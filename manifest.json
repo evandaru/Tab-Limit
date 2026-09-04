@@ -12,7 +12,9 @@
         "alarms",
         "downloads",
         "notifications",
-        "unlimitedStorage"
+        "unlimitedStorage",
+        "bookmarks",
+        "topSites"
     ],
     "host_permissions": [
         "*://*/*"
@@ -25,6 +27,9 @@
         "default_icon": {
             "16": "assets/icon-16.png"
         }
+    },
+    "chrome_url_overrides": {
+        "newtab": "src/entrypoints/newtab/index.html"
     },
     "background": {
         "service_worker": "src/entrypoints/background/index.js",

@@ -85,5 +85,25 @@ document.addEventListener("DOMContentLoaded", async () => {
       chrome.runtime.openOptionsPage();
     });
   }
+
+  // Pengaturan Fitur Tab Focus (New Tab)
+  const tabFocusCheckbox = document.getElementById("tabFocusEnabled");
+  if (tabFocusCheckbox) {
+    chrome.storage.sync.get({ tabFocusEnabled: true }, (res) => {
+      tabFocusCheckbox.checked = res.tabFocusEnabled;
+    });
+    tabFocusCheckbox.addEventListener("change", () => {
+      chrome.storage.sync.set({ tabFocusEnabled: tabFocusCheckbox.checked });
+    });
+  }
+
+  const openTabFocusBtn = document.getElementById("openTabFocusBtn");
+  if (openTabFocusBtn) {
+    openTabFocusBtn.addEventListener("click", () => {
+      chrome.tabs.create({
+        url: chrome.runtime.getURL("src/entrypoints/newtab/index.html"),
+      });
+    });
+  }
 });
 
