@@ -25,7 +25,7 @@ export function initDarkMode() {
     });
 
     chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-        // Jalankan saat tab sedang dimuat
+        // Run while the tab is loading
         if (changeInfo.status === "loading" && tab.url) {
             handleTab(tabId, tab.url);
         }
@@ -54,7 +54,7 @@ async function handleTab(tabId, url) {
         if (shouldApply) {
             await chrome.scripting.executeScript({
                 target: { tabId },
-                func: applySmartDarkMode // Memanggil engine pintar kita
+                func: applySmartDarkMode // Calls our smart engine
             });
         } else {
             await chrome.scripting.executeScript({
@@ -63,6 +63,6 @@ async function handleTab(tabId, url) {
             });
         }
     } catch (e) {
-        // Biasanya gagal jika mencoba inject di chrome:// atau Chrome Web Store
+        // Usually fails when injecting into chrome:// or the Chrome Web Store
     }
 }

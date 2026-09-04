@@ -29,6 +29,6 @@ export async function initFocusModeUI() {
       blockedSites: sanitizedSites,
     });
 
-    alert("Pengaturan Mode Fokus berhasil disimpan!");
+    alert("Focus Mode settings saved!");
   });
 }

@@ -1,6 +1,6 @@
 /**
  * Video Speed Controller Engine
- * Mengontrol playback speed semua elemen video secara reaktif.
+ * Reactively controls the playback speed of all video elements.
  */
 
 export function applyVideoSpeedController() {
@@ -149,7 +149,7 @@ export function applyVideoSpeedController() {
 
         targetVideo = hoveredVideo;
 
-        // Force resync (YouTube suka reset playbackRate)
+        // Force resync (YouTube likes to reset playbackRate)
         if (hoveredVideo.playbackRate !== playbackSpeed) {
             hoveredVideo.playbackRate = playbackSpeed;
         }

@@ -1,6 +1,6 @@
 export const StorageAPI = {
   /**
-   * Mengambil semua kutipan yang tersimpan.
+   * Fetches all saved quotes.
    * @returns {Promise<Array>} Array of saved items
    */
   async getQuotes() {
@@ -12,7 +12,7 @@ export const StorageAPI = {
   },
 
   /**
-   * Menyimpan kutipan baru ke dalam storage.
+   * Saves a new quote to storage.
    * @param {Object} quoteData - { text, url, timestamp }
    * @returns {Promise<void>}
    */
@@ -27,7 +27,7 @@ export const StorageAPI = {
   },
 
   /**
-   * Menghapus semua data (opsional, untuk utilitas dasbor).
+   * Clears all data (optional, for dashboard utilities).
    */
   async clearQuotes() {
     return new Promise((resolve) => {

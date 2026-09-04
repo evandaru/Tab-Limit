@@ -1,13 +1,13 @@
 <!doctype html>
-<html lang="id">
+<html lang="en">
 
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Fokus & Clipboard</title>
+  <title>Focus & Clipboard</title>
   <style>
     /* ==========================================
-       DESIGN SYSTEM & TEMA CSS VARIABLES
+       DESIGN SYSTEM & THEME CSS VARIABLES
        ========================================== */
     :root {
       --bg-body: #f8fafc;
@@ -334,7 +334,7 @@
       overflow-y: auto;
     }
 
-    /* Scrollbar halus */
+    /* Smooth scrollbar */
     .ranking-list::-webkit-scrollbar {
       width: 4px;
     }
@@ -349,43 +349,43 @@
   <!-- Tab Navigation -->
   <div class="tab-nav">
     <button class="tab-btn active" id="tabBtnAnalytics" data-target="tabAnalytics">
-      📊 Dashboard Analitik
+      📊 Analytics Dashboard
     </button>
     <button class="tab-btn" id="tabBtnControls" data-target="tabControls">
-      ⚡ Kontrol & Fitur
+      ⚡ Controls & Features
     </button>
   </div>
 
-  <!-- PANE 1: KONTROL & FITUR -->
+  <!-- PANE 1: CONTROLS & FEATURES -->
   <div class="tab-pane" id="tabControls">
     <div class="row">
       <label class="checkbox-label">
         <input type="checkbox" id="tabFocusEnabled" />
-        Aktifkan Tab Focus (New Tab Kustom)
+        Enable Tab Focus (Custom New Tab)
       </label>
     </div>
 
     <div class="row">
       <label class="checkbox-label">
         <input type="checkbox" id="enabled" />
-        Aktifkan Mode Fokus
+        Enable Focus Mode
       </label>
     </div>
 
     <div class="row">
       <label class="checkbox-label">
         <input type="checkbox" id="cleanerEnabled" />
-        Aktifkan Link Cleaner (Hapus Tracker)
+        Enable Link Cleaner (Remove Trackers)
       </label>
     </div>
 
     <div class="row">
-      <label for="maxTabs">Batas Maksimal Tab</label>
+      <label for="maxTabs">Max Tabs Limit</label>
       <input type="number" id="maxTabs" min="1" />
     </div>
 
     <div class="row">
-      <label for="blockedSites">Blokir Situs (pisahkan dengan baris baru/koma)</label>
+      <label for="blockedSites">Block Sites (separate with new lines/commas)</label>
       <textarea id="blockedSites" rows="3" placeholder="facebook.com&#10;twitter.com"></textarea>
     </div>
 
@@ -393,18 +393,18 @@
     <div class="row">
       <label class="checkbox-label">
         <input type="checkbox" id="darkEnabled" />
-        Aktifkan Dark Mode
+        Enable Dark Mode
       </label>
     </div>
 
     <div class="row">
-      <label for="darkExcluded">Pengecualian Dark Mode (Website Terang)</label>
+      <label for="darkExcluded">Dark Mode Exclusions (Light Websites)</label>
       <textarea id="darkExcluded" rows="2" placeholder="youtube.com&#10;github.com"></textarea>
     </div>
 
     <hr>
     <div class="row" style="margin-bottom: 12px;">
-      <label>Responsive Tester (Buka di Window Baru)</label>
+      <label>Responsive Tester (Open in New Window)</label>
       <div id="responsiveTesterContainer" style="display: flex; gap: 6px; margin-top: 6px;">
         <button data-device="mobile" style="margin: 0; background-color: #6366f1; padding: 7px 4px; font-size: 11px;">
           📱 Mobile
@@ -421,69 +421,81 @@
     <hr>
     <!-- Pomodoro Widget -->
     <div class="row" style="text-align: center; background: var(--bg-card); padding: 12px; border-radius: 10px; border: 1px solid var(--border-color); box-shadow: var(--card-shadow);">
-      <div style="font-size: 12px; font-weight: 600; margin-bottom: 4px;" id="pomoStatus">💤 Pomodoro Nonaktif</div>
+      <div style="font-size: 12px; font-weight: 600; margin-bottom: 4px;" id="pomoStatus">💤 Pomodoro Inactive</div>
       <div style="font-family: monospace; font-size: 28px; font-weight: 700; margin-bottom: 8px; color: var(--text-main);" id="pomoTimer">25:00</div>
 
-      <button id="startPomoBtn" class="btn-success" style="margin-bottom: 0;">🔥 Mulai Fokus</button>
-      <button id="stopPomoBtn" style="background-color: var(--danger); display: none; margin-bottom: 0;">🛑 Berhenti</button>
+      <button id="startPomoBtn" class="btn-success" style="margin-bottom: 0;">🔥 Start Focus</button>
+      <button id="stopPomoBtn" style="background-color: var(--danger); display: none; margin-bottom: 0;">🛑 Stop</button>
     </div>
 
     <hr>
-    <button id="saveBtn">💾 Simpan Pengaturan</button>
+    <button id="saveBtn">💾 Save Settings</button>
     <button id="copyMdBtn" class="btn-success">📝 Copy Blog as .md</button>
     <button id="pasteHtmlBtn" class="btn-secondary" style="color: #0284c7;">
       🌐 Paste Code as .html
     </button>
     <button id="copyLinksBtn" class="btn-secondary" style="color: #7c3aed;">
-      🔗 Copy Semua Link
+      🔗 Copy All Links
     </button>
     <button id="openTabFocusBtn" class="btn-secondary" style="color: #2563eb; font-weight: 700;">
-      🌟 Buka Tab Focus (New Tab)
+      🌟 Open Tab Focus (New Tab)
     </button>
     <button id="openDashboardBtn" class="btn-secondary">
-      📖 Buka Dashboard Kutipan
+      📖 Open Quotes Dashboard
     </button>
   </div>
 
-  <!-- PANE 2: DASHBOARD ANALITIK -->
+  <!-- PANE 2: ANALYTICS DASHBOARD -->
   <div class="tab-pane active" id="tabAnalytics">
     <!-- Header & Refresh -->
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-      <span style="font-size: 13px; font-weight: 700; color: var(--text-main);">📈 Ringkasan Aktivitas</span>
+      <span style="font-size: 13px; font-weight: 700; color: var(--text-main);">📈 Activity Summary</span>
       <button id="refreshAnalyticsBtn" style="width: auto; padding: 4px 10px; font-size: 11px; margin: 0; background-color: var(--bg-card); color: var(--text-main); border: 1px solid var(--border-color);">
         🔄 Refresh
       </button>
     </div>
 
-    <!-- Filter Periode (Pills) -->
+    <!-- Period Filter (Pills) -->
     <div class="filter-pills">
-      <button class="timeframe-filter-btn active" data-filter="today">Hari Ini</button>
-      <button class="timeframe-filter-btn" data-filter="week">Mingguan</button>
-      <button class="timeframe-filter-btn" data-filter="month">Bulanan</button>
-      <button class="timeframe-filter-btn" data-filter="year">Tahunan</button>
-      <button class="timeframe-filter-btn" data-filter="all">Total</button>
+      <button class="timeframe-filter-btn active" data-filter="today">Today</button>
+      <button class="timeframe-filter-btn" data-filter="week">Weekly</button>
+      <button class="timeframe-filter-btn" data-filter="month">Monthly</button>
+      <button class="timeframe-filter-btn" data-filter="year">Yearly</button>
+      <button class="timeframe-filter-btn" data-filter="all">All</button>
     </div>
 
     <!-- Stat Cards Grid -->
     <div class="stat-grid-compact">
       <div class="stat-box">
-        <div class="stat-label" id="statTimeframeLabel">Waktu</div>
+        <div class="stat-label" id="statTimeframeLabel">Time</div>
         <div class="stat-value" id="statTodayTime">0m</div>
       </div>
       <div class="stat-box">
-        <div class="stat-label">Distraksi</div>
+        <div class="stat-label">Distractions</div>
         <div class="stat-value danger" id="statDistractions">0</div>
       </div>
       <div class="stat-box">
-        <div class="stat-label">Top Situs</div>
+        <div class="stat-label">Top Site</div>
         <div class="stat-value small" id="statTopDomain">-</div>
+      </div>
+    </div>
+
+    <!-- Tabs Opened / Closed Stats (follows the period filter above) -->
+    <div class="stat-grid-compact" style="grid-template-columns: repeat(2, 1fr);">
+      <div class="stat-box">
+        <div class="stat-label">📂 Tabs Opened</div>
+        <div class="stat-value" id="statTabsOpened">0</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">📁 Tabs Closed</div>
+        <div class="stat-value danger" id="statTabsClosed">0</div>
       </div>
     </div>
 
     <!-- Visual Chart Card -->
     <div class="analytics-card">
       <div class="analytics-card-header">
-        <h4 class="analytics-card-title">📊 Visualisasi Distribusi Waktu</h4>
+        <h4 class="analytics-card-title">📊 Time Distribution</h4>
       </div>
       <div id="analyticsChartContainer">
         <!-- SVG Donut Chart dynamically rendered here -->
@@ -493,16 +505,16 @@
     <!-- Domain Allocation Card -->
     <div class="analytics-card">
       <div class="analytics-card-header">
-        <h4 class="analytics-card-title">🌐 Alokasi Domain Teratas</h4>
+        <h4 class="analytics-card-title">🌐 Top Domain Allocation</h4>
       </div>
       <ul id="domainRanking" class="ranking-list">
-        <!-- List item domain rendered here -->
+        <!-- Domain list items rendered here -->
       </ul>
     </div>
 
-    <!-- Shortcut ke Options Page -->
+    <!-- Shortcut to Options Page -->
     <button id="openFullAnalyticsBtn" class="btn-secondary" style="margin-top: 6px;">
-      🚀 Buka Dashboard Lengkap di Tab Baru
+      🚀 Open Full Dashboard in New Tab
     </button>
   </div>
 

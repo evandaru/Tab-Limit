@@ -1,8 +1,8 @@
 {
     "manifest_version": 3,
-    "name": "Fokus & Clipboard",
+    "name": "Focus & Clipboard",
     "version": "2.1.0",
-    "description": "Membatasi tab, memblokir distraksi, mengekstrak artikel, dan manajemen snippet.",
+    "description": "Limits tabs, blocks distractions, extracts articles, and manages snippets.",
     "permissions": [
         "tabs",
         "storage",

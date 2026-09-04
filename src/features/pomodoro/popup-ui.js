@@ -6,7 +6,7 @@ export function initPomodoroPopupUI() {
 
     if (!pomoStatus || !pomoTimer) return;
 
-    // Format detik ke MM:SS
+    // Format seconds to MM:SS
     const formatTimeLeft = (seconds) => {
         const m = Math.floor(seconds / 60).toString().padStart(2, '0');
         const s = (seconds % 60).toString().padStart(2, '0');
@@ -16,14 +16,14 @@ export function initPomodoroPopupUI() {
     const updateUI = () => {
         chrome.storage.local.get(['pomoActive', 'pomoType', 'pomoTimeLeft'], (data) => {
             if (data.pomoActive) {
-                pomoStatus.innerText = data.pomoType === 'work' ? '🔥 Sedang Fokus' : '☕ Waktu Istirahat';
+                pomoStatus.innerText = data.pomoType === 'work' ? '🔥 Focusing' : '☕ Break Time';
                 pomoStatus.style.color = data.pomoType === 'work' ? '#dc3545' : '#198754';
                 pomoTimer.innerText = formatTimeLeft(data.pomoTimeLeft);
 
                 startPomoBtn.style.display = 'none';
                 stopPomoBtn.style.display = 'block';
             } else {
-                pomoStatus.innerText = '💤 Pomodoro Nonaktif';
+                pomoStatus.innerText = '💤 Pomodoro Inactive';
                 pomoStatus.style.color = '#333';
                 pomoTimer.innerText = '25:00';
 
@@ -33,21 +33,21 @@ export function initPomodoroPopupUI() {
         });
     };
 
-    // Kirim sinyal START ke background
+    // Send the START signal to the background
     startPomoBtn.addEventListener('click', () => {
         chrome.runtime.sendMessage({ action: 'togglePomodoro', active: true }, () => {
             updateUI();
         });
     });
 
-    // Kirim sinyal STOP ke background
+    // Send the STOP signal to the background
     stopPomoBtn.addEventListener('click', () => {
         chrome.runtime.sendMessage({ action: 'togglePomodoro', active: false }, () => {
             updateUI();
         });
     });
 
-    // Polling UI setiap detik agar angka jam di popup ikut mundur secara real-time
+    // Poll the UI every second so the popup clock counts down in real time
     setInterval(updateUI, 1000);
     updateUI();
 }

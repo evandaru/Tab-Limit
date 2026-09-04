@@ -1,15 +1,15 @@
 import { triggerBadgeFeedback } from "../../shared/utils/ui-feedback.js";
 
 /**
- * Pure function untuk dieksekusi di dalam isolated content script.
- * Melakukan scraping, sanitasi parameter (tracker cleaner), dan deduplikasi URI.
+ * Pure function executed inside the isolated content script.
+ * Scrapes links, sanitizes tracker params, and deduplicates URIs.
  */
 function extractAllLinksEngine() {
     const anchorNodes = document.querySelectorAll("a[href]");
     const uniqueLinks = new Set();
 
-    // Daftar parameter tracker didefinisikan di dalam fungsi karena 
-    // fungsi ini dieksekusi dalam isolated scope tab target.
+    // Tracker params are defined inside because this function
+    // runs in the target tab's isolated scope.
     const EXACT_TRACKERS = new Set([
         'fbclid', 'gclid', 'igshid', 'ref', '_ga',
         'mc_cid', 'mc_eid', 'yclid', '_ke', 'mkt_tok'
@@ -21,7 +21,7 @@ function extractAllLinksEngine() {
             const url = new URL(a.href);
             if (url.protocol === "http:" || url.protocol === "https:") {
 
-                // 1. Identifikasi parameter kotor
+                // 1. Identify dirty params
                 const keysToDelete = [];
                 for (const key of url.searchParams.keys()) {
                     const lowerKey = key.toLowerCase();
@@ -33,14 +33,14 @@ function extractAllLinksEngine() {
                     }
                 }
 
-                // 2. Sanitasi URL secara in-place
+                // 2. Sanitize the URL in place
                 keysToDelete.forEach(key => url.searchParams.delete(key));
 
-                // 3. Simpan URL yang sudah benar-benar bersih ke dalam Set
+                // 3. Store the fully cleaned URL in the Set
                 uniqueLinks.add(url.href);
             }
         } catch (e) {
-            // Evaluasi URI asimetris diabaikan secara silent
+            // Malformed URIs are silently ignored
         }
     });
 
@@ -48,7 +48,7 @@ function extractAllLinksEngine() {
 }
 
 /**
- * Handler eksekusi via Context Menu (Background Context)
+ * Execution handler via Context Menu (background context)
  */
 export async function handleLinkExtractorMenu(info, tab) {
     if (info.menuItemId === "copy-all-links") {
@@ -77,7 +77,7 @@ export async function handleLinkExtractorMenu(info, tab) {
 }
 
 /**
- * Handler eksekusi via Popup (UI Context)
+ * Execution handler via Popup (UI context)
  */
 export async function initLinkExtractorUI() {
     const copyLinksBtn = document.getElementById("copyLinksBtn");
@@ -87,7 +87,7 @@ export async function initLinkExtractorUI() {
     copyLinksBtn.addEventListener("click", async () => {
         try {
             const originalText = copyLinksBtn.innerText;
-            copyLinksBtn.innerText = "⏳ Memproses...";
+            copyLinksBtn.innerText = "⏳ Processing...";
             copyLinksBtn.disabled = true;
 
             const [activeTab] = await chrome.tabs.query({
@@ -95,7 +95,7 @@ export async function initLinkExtractorUI() {
                 currentWindow: true,
             });
 
-            if (!activeTab) throw new Error("Tidak ada tab aktif.");
+            if (!activeTab) throw new Error("No active tab.");
 
             const results = await chrome.scripting.executeScript({
                 target: { tabId: activeTab.id },
@@ -106,9 +106,9 @@ export async function initLinkExtractorUI() {
 
             if (extractedLinks) {
                 await navigator.clipboard.writeText(extractedLinks);
-                copyLinksBtn.innerText = `✅ Tersalin (${extractedLinks.split('\n').length} link)`;
+                copyLinksBtn.innerText = `✅ Copied (${extractedLinks.split('\n').length} links)`;
             } else {
-                copyLinksBtn.innerText = "⚠️ Tidak Ada Link";
+                copyLinksBtn.innerText = "⚠️ No Links";
             }
 
             setTimeout(() => {
@@ -117,9 +117,9 @@ export async function initLinkExtractorUI() {
             }, 2000);
         } catch (error) {
             console.error("[Link Extractor] Popup execution failed:", error);
-            copyLinksBtn.innerText = "❌ Gagal Menyalin";
+            copyLinksBtn.innerText = "❌ Copy Failed";
             setTimeout(() => {
-                copyLinksBtn.innerText = "Copy Semua Link";
+                copyLinksBtn.innerText = "Copy All Links";
                 copyLinksBtn.disabled = false;
             }, 2000);
         }

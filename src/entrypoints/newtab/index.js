@@ -22,7 +22,7 @@ function initPortalClock() {
         month: "long",
         year: "numeric",
       };
-      dateEl.innerText = now.toLocaleDateString("id-ID", options);
+      dateEl.innerText = now.toLocaleDateString("en-US", options);
     }
   };
 
@@ -42,7 +42,7 @@ function initPortalClock() {
 
   startClock();
 
-  // Hemat CPU 100%: hentikan timer saat pengguna berpindah tab
+  // Save 100% CPU: stop the timer when the user switches tabs
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) {
       stopClock();
@@ -61,7 +61,7 @@ async function loadBrowserDashboard() {
   const logo = document.getElementById("browserLogo");
 
   if (statusText) statusText.innerHTML = `<span>⏳</span> Downloading data from localhost...`;
-  if (logo) logo.style.color = "#ffff00"; // Indikator loading
+  if (logo) logo.style.color = "var(--nt-accent)"; // Loading indicator (follows the system theme)
 
   try {
     const todayKey = getTodayKey();
@@ -71,27 +71,91 @@ async function loadBrowserDashboard() {
       totalTime: 0,
       domains: {},
       distractions: 0,
+      tabsOpened: 0,
+      tabsClosed: 0,
+      peakTabs: 0,
+      hourly: {},
+      firstSeen: null,
+      lastSeen: null,
     };
     const allTimeTotal = allData.allTimeTotal || todayData.totalTime || 0;
 
-    // 1. Statistik Kiri
+    // 1. Left stats
     const valTodayTime = document.getElementById("valTodayTime");
     const valTotalTime = document.getElementById("valTotalTime");
     const valDistractions = document.getElementById("valDistractions");
+    const valTabsOpened = document.getElementById("valTabsOpened");
+    const valTabsClosed = document.getElementById("valTabsClosed");
     const valTopDomain = document.getElementById("valTopDomain");
+    const valPeakTabs = document.getElementById("valPeakTabs");
+    const valFirstSeen = document.getElementById("valFirstSeen");
+    const valLastSeen = document.getElementById("valLastSeen");
+    const valStreak = document.getElementById("valStreak");
+
+    const fmtClock = (ts) => {
+      if (!ts) return "-";
+      const d = new Date(ts);
+      return `${String(d.getHours()).padStart(2, "0")}:${String(
+        d.getMinutes()
+      ).padStart(2, "0")}`;
+    };
 
     if (valTodayTime) valTodayTime.innerText = formatTime(todayData.totalTime);
     if (valTotalTime) valTotalTime.innerText = formatTime(allTimeTotal);
-    if (valDistractions) valDistractions.innerText = `${todayData.distractions || 0} kali`;
+    if (valDistractions) valDistractions.innerText = `${todayData.distractions || 0} times`;
+    if (valTabsOpened) valTabsOpened.innerText = `${todayData.tabsOpened || 0} tabs`;
+    if (valTabsClosed) valTabsClosed.innerText = `${todayData.tabsClosed || 0} tabs`;
+    if (valPeakTabs) valPeakTabs.innerText = `${todayData.peakTabs || 0} tabs`;
+    if (valFirstSeen) valFirstSeen.innerText = fmtClock(todayData.firstSeen);
+    if (valLastSeen) valLastSeen.innerText = fmtClock(todayData.lastSeen);
 
-    // 2. Status Pomodoro
+    // 1b. Streak: consecutive active days up to today/yesterday
+    if (valStreak) {
+      const hasActivity = (dateStr) => {
+        const e = allData[`analytics_${dateStr}`];
+        if (!e) return false;
+        return (e.totalTime || 0) > 0 || (e.tabsOpened || 0) > 0 || !!e.firstSeen;
+      };
+      const fmtDate = (d) =>
+        `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+          d.getDate()
+        ).padStart(2, "0")}`;
+      const todayStr = todayKey.replace("analytics_", "");
+      const cursor = new Date(todayStr + "T00:00:00");
+      if (!hasActivity(todayStr)) cursor.setDate(cursor.getDate() - 1);
+      let streak = 0;
+      while (streak < 3650) {
+        if (!hasActivity(fmtDate(cursor))) break;
+        streak += 1;
+        cursor.setDate(cursor.getDate() - 1);
+      }
+      valStreak.innerText = `${streak} days`;
+    }
+
+    // 1c. 24-hour heatmap (00–23) for today
+    const rhythmHeatmap = document.getElementById("rhythmHeatmap");
+    if (rhythmHeatmap) {
+      rhythmHeatmap.innerHTML = "";
+      const hourly = todayData.hourly || {};
+      const maxSec = Math.max(1, ...Array.from({ length: 24 }, (_, h) => hourly[h] || 0));
+      for (let h = 0; h < 24; h++) {
+        const sec = hourly[h] || 0;
+        const bar = document.createElement("div");
+        bar.className = "rhythm-bar" + (sec > 0 ? " hot" : "");
+        bar.style.height = `${Math.max(8, Math.round((sec / maxSec) * 100))}%`;
+        bar.title = `${String(h).padStart(2, "0")}:00 — ${formatTime(sec)}`;
+        rhythmHeatmap.appendChild(bar);
+      }
+    }
+
+    // 2. Pomodoro status
     const pomoLabel = document.getElementById("pomoLabel");
     const pomoTimerDisplay = document.getElementById("pomoTimerDisplay");
     if (pomoLabel && pomoTimerDisplay) {
       if (allData.pomoActive) {
         const isWork = allData.pomoType === "work";
-        pomoLabel.innerText = isWork ? "🔥 Sesi Fokus Aktif" : "☕ Waktu Istirahat";
-        pomoLabel.style.color = isWork ? "#cc0000" : "#006600";
+        pomoLabel.innerText = isWork ? "🔥 Focus Session Active" : "☕ Break Time";
+        pomoLabel.style.color = isWork ? "var(--nt-danger)" : "var(--nt-accent)";
 
         const m = Math.floor((allData.pomoTimeLeft || 0) / 60)
           .toString()
@@ -101,13 +165,14 @@ async function loadBrowserDashboard() {
           .padStart(2, "0");
         pomoTimerDisplay.innerText = `${m}:${s}`;
       } else {
-        pomoLabel.innerText = "💤 Nonaktif";
-        pomoLabel.style.color = "#333333";
+        pomoLabel.innerText = "💤 Inactive";
+        pomoLabel.style.color = "var(--nt-text)";
         pomoTimerDisplay.innerText = "25:00";
+        pomoTimerDisplay.style.color = "var(--nt-accent)";
       }
     }
 
-    // 3. Tabel Alokasi Domain
+    // 3. Domain allocation table
     const domains = todayData.domains || {};
     const sortedDomains = Object.entries(domains).sort(([, a], [, b]) => b - a);
 
@@ -117,7 +182,7 @@ async function loadBrowserDashboard() {
 
     const domainBadge = document.getElementById("domainCountBadge");
     if (domainBadge) {
-      domainBadge.innerText = `${sortedDomains.length} situs terekam`;
+      domainBadge.innerText = `${sortedDomains.length} sites recorded`;
     }
 
     const domainTableList = document.getElementById("domainTableList");
@@ -126,8 +191,8 @@ async function loadBrowserDashboard() {
       if (sortedDomains.length === 0) {
         domainTableList.innerHTML = `
           <tr>
-            <td colspan="4" style="text-align: center; color: #888888; padding: 16px;">
-              Belum ada aktivitas browsing yang terekam hari ini.
+            <td colspan="4" style="text-align: center; color: var(--nt-faint); padding: 16px;">
+              No browsing activity recorded today.
             </td>
           </tr>`;
       } else {
@@ -136,8 +201,8 @@ async function loadBrowserDashboard() {
           const percent = Math.round((sec / totalSecs) * 100);
           const tr = document.createElement("tr");
           tr.innerHTML = `
-            <td style="text-align: center; font-weight: bold; color: #666666;">${idx + 1}</td>
-            <td style="font-weight: bold; color: #003399;">${dom}</td>
+            <td style="text-align: center; font-weight: bold; color: var(--nt-muted);">${idx + 1}</td>
+            <td style="font-weight: bold; color: var(--nt-accent);">${dom}</td>
             <td style="font-family: monospace;">${formatTime(sec)}</td>
             <td>
               <div style="display: flex; align-items: center; gap: 6px;">
@@ -153,7 +218,7 @@ async function loadBrowserDashboard() {
       }
     }
 
-    // 4. Tabel Riwayat 7 Hari
+    // 4. 7-day history table
     const historyTableList = document.getElementById("historyTableList");
     if (historyTableList) {
       historyTableList.innerHTML = "";
@@ -166,8 +231,8 @@ async function loadBrowserDashboard() {
       if (dateKeys.length === 0) {
         historyTableList.innerHTML = `
           <tr>
-            <td colspan="2" style="text-align: center; color: #888888; padding: 12px;">
-              Belum ada riwayat tercatat.
+            <td colspan="5" style="text-align: center; color: var(--nt-faint); padding: 12px;">
+              No history recorded.
             </td>
           </tr>`;
       } else {
@@ -177,7 +242,10 @@ async function loadBrowserDashboard() {
           const tr = document.createElement("tr");
           tr.innerHTML = `
             <td><b>${dateStr}</b></td>
-            <td style="font-family: monospace; font-weight: bold; color: #003399;">${formatTime(entry.totalTime || 0)}</td>
+            <td style="font-family: monospace; font-weight: bold; color: var(--nt-accent);">${formatTime(entry.totalTime || 0)}</td>
+            <td style="text-align: center; font-weight: bold;">${entry.tabsOpened || 0}</td>
+            <td style="text-align: center; font-weight: bold;">${entry.tabsClosed || 0}</td>
+            <td style="text-align: center; font-weight: bold;">${entry.peakTabs || 0}</td>
           `;
           historyTableList.appendChild(tr);
         });
@@ -185,10 +253,30 @@ async function loadBrowserDashboard() {
     }
 
     if (statusText) statusText.innerHTML = `<span>📄</span> Done`;
-    if (logo) logo.style.color = "#60a5fa";
+    if (logo) logo.style.color = "var(--nt-accent)";
   } catch (err) {
     if (statusText) statusText.innerHTML = `<span>⚠️</span> Error loading dashboard.`;
-    if (logo) logo.style.color = "#f87171";
+    if (logo) logo.style.color = "var(--nt-danger)";
+  }
+}
+
+// ==========================================
+// 2b. AUTO DARK/LIGHT follows the system setting
+// CSS already uses prefers-color-scheme; this listener ensures
+// dynamic colors (logo/status) update when the OS theme changes.
+// ==========================================
+function initSystemThemeWatcher() {
+  const media = window.matchMedia("(prefers-color-scheme: dark)");
+  const applyTheme = () => {
+    // Mark the active theme on <html> for debugging / extra styling
+    document.documentElement.dataset.systemTheme = media.matches ? "dark" : "light";
+  };
+  applyTheme();
+  if (typeof media.addEventListener === "function") {
+    media.addEventListener("change", () => {
+      applyTheme();
+      loadBrowserDashboard();
+    });
   }
 }
 
@@ -244,11 +332,11 @@ function initBrowserControls() {
 
   if (menuHelp) {
     menuHelp.addEventListener("click", () => {
-      alert("Tab Focus - Classic Browser Edition\nVersi 2.1.0 (Build 2000)\nMemory Footprint: < 20 MB (Lightweight & Native)");
+      alert("Tab Focus - Classic Browser Edition\nVersion 2.1.0 (Build 2000)\nMemory Footprint: < 20 MB (Lightweight & Native)");
     });
   }
 
-  // Auto-sync jika ada perubahan di storage tanpa polling
+  // Auto-sync on storage changes without polling
   chrome.storage.onChanged.addListener((changes, areaName) => {
     if (areaName === "local") {
       loadBrowserDashboard();
@@ -262,5 +350,6 @@ function initBrowserControls() {
 document.addEventListener("DOMContentLoaded", () => {
   initPortalClock();
   initBrowserControls();
+  initSystemThemeWatcher();
   loadBrowserDashboard();
 });

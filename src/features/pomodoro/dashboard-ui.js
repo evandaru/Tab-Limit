@@ -7,10 +7,10 @@ export function initPomodoroDashboard() {
 
     if (!saveBtn) return;
 
-    // Sinkronisasi Live Preview Teks & Ukuran
+    // Live-sync text & size preview
     const updateLivePreview = () => {
-        const text = textInput.value || "mangat2";
-        previewText.innerHTML = `${text}<br>kurang 25:00`;
+        const text = textInput.value || "stay focused";
+        previewText.innerHTML = `${text}<br>25:00 left`;
         if (sizeSlider && previewImg) {
             previewImg.style.width = `${sizeSlider.value}px`;
         }
@@ -19,26 +19,26 @@ export function initPomodoroDashboard() {
     if (textInput) textInput.addEventListener('input', updateLivePreview);
     if (sizeSlider) sizeSlider.addEventListener('input', updateLivePreview);
 
-    // Load Data dari Storage (sudah tanpa pomoImage)
+    // Load data from storage (no more pomoImage)
     chrome.storage.local.get(['pomoSize', 'pomoDefaultText'], (data) => {
         if (data.pomoSize && sizeSlider) sizeSlider.value = data.pomoSize;
         if (data.pomoDefaultText && textInput) textInput.value = data.pomoDefaultText;
         updateLivePreview();
     });
 
-    // Handler Simpan
+    // Save handler
     saveBtn.addEventListener('click', async () => {
         const settings = {
             pomoSize: sizeSlider ? parseInt(sizeSlider.value) : 120,
-            pomoDefaultText: textInput ? textInput.value : "mangat2",
-            pomoText: textInput ? textInput.value : "mangat2"
+            pomoDefaultText: textInput ? textInput.value : "stay focused",
+            pomoText: textInput ? textInput.value : "stay focused"
         };
 
         await chrome.storage.local.set(settings);
 
-        // Opsional: Hapus sisa pomoImage lama jika masih ada di storage pengguna
+        // Optional: remove any leftover pomoImage from user storage
         chrome.storage.local.remove('pomoImage');
 
-        alert("✅ Pengaturan berhasil disimpan!");
+        alert("✅ Settings saved!");
     });
 }

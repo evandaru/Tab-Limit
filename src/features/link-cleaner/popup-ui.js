@@ -7,7 +7,7 @@ export async function initLinkCleanerUI() {
     const data = await chrome.storage.sync.get(["cleanerEnabled"]);
     cleanerEnabledEl.checked = data.cleanerEnabled ?? false;
 
-    // Binding ke tombol simpan yang sudah eksis di arsitektur Anda
+    // Binds to the existing save button in your architecture
     saveBtn.addEventListener("click", async () => {
         await chrome.storage.sync.set({
             cleanerEnabled: cleanerEnabledEl.checked,

@@ -5,17 +5,21 @@ import { handleDomExtractorMenu } from "../dom-extractor/parser.js";
 import { handleFakeFillerMenu } from "../fake-filler/filler-engine.js";
 import { handleLinkExtractorMenu } from "../link-extractor/engine.js";
 
-export function initContextMenus() {
-  chrome.runtime.onInstalled.addListener(() => {
-    // Menu Simpan/Copy Teks & Kode
+let clickListenerRegistered = false;
+
+function setupMenus() {
+  // Remove old menus first to avoid duplicate ids
+  // (Chrome menus persist across extension reloads/updates).
+  chrome.contextMenus.removeAll(() => {
+    // Save/Copy text & code menus
     chrome.contextMenus.create({
       id: "save-text",
-      title: "📝 Simpan Teks ke Dashboard",
+      title: "📝 Save Text to Dashboard",
       contexts: ["selection"],
     });
     chrome.contextMenus.create({
       id: "save-code",
-      title: "💻 Simpan Kode ke Dashboard",
+      title: "💻 Save Code to Dashboard",
       contexts: ["selection"],
     });
     chrome.contextMenus.create({
@@ -24,23 +28,23 @@ export function initContextMenus() {
       contexts: ["all"],
     });
 
-    // FITUR BARU: Copy Blog as MD (Berbasis DOM Parsing)
+    // NEW FEATURE: Copy Blog as MD (DOM parsing based)
     chrome.contextMenus.create({
       id: "copy-blog-md",
-      title: "📋 Copy Seluruh Blog as MD",
+      title: "📋 Copy Entire Blog as MD",
       contexts: ["page"],
     });
 
-    // FITUR BARU: Save Code as HTML (Khusus untuk blok kode yang diseleksi)
+    // NEW FEATURE: Save Code as HTML (for selected code blocks)
     chrome.contextMenus.create({
       id: "save-code-html",
-      title: "📄 Save Seleksi as .html",
+      title: "📄 Save Selection as .html",
       contexts: ["selection"],
     });
 
     chrome.contextMenus.create({
       id: "copy-all-links",
-      title: "🔗 Copy Semua Link di Halaman",
+      title: "🔗 Copy All Links on Page",
       contexts: ["page", "all"],
     });
 
@@ -51,10 +55,24 @@ export function initContextMenus() {
     });
     chrome.contextMenus.create({
       id: "open-dashboard",
-      title: "📁 Buka Dashboard Kutipan",
+      title: "📖 Open Quotes Dashboard",
       contexts: ["all"],
     });
   });
+}
+
+export function initContextMenus() {
+  // Re-register on install/update...
+  chrome.runtime.onInstalled.addListener(() => {
+    setupMenus();
+  });
+
+  // ...and on every service worker start (MV3 is ephemeral).
+  setupMenus();
+
+  // Avoid duplicate listeners if init is called again.
+  if (clickListenerRegistered) return;
+  clickListenerRegistered = true;
 
   chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     try {

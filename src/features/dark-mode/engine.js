@@ -1,7 +1,7 @@
 /**
  * Smart Dark Mode Engine (Production-Ready)
- * Menggunakan pendekatan Heuristik Berlapis dan DOM Mutation Observer 
- * untuk mendukung Single Page Applications (SPA).
+ * Uses a layered heuristic approach with DOM Mutation Observers
+ * to support Single Page Applications (SPAs).
  */
 export function applySmartDarkMode() {
     if (window.__DEVKITA_DARK_ENGINE) return;
@@ -12,40 +12,40 @@ export function applySmartDarkMode() {
         const body = document.body;
         if (!body) return false;
 
-        // Lapis 1: Deteksi Atribut Global & Class (Standar Industri Modern)
-        // Mengecek apakah developer web sudah menyuntikkan class/data-theme dark.
+        // Layer 1: Global Attribute & Class Detection (Modern Industry Standard)
+        // Checks whether the site already injected a dark class/data-theme.
         const htmlStr = (html.className + ' ' + (html.getAttribute('data-theme') || '')).toLowerCase();
         const bodyStr = (body.className + ' ' + (body.getAttribute('data-theme') || '')).toLowerCase();
 
         if (htmlStr.includes('dark') || bodyStr.includes('dark')) return true;
 
-        // Lapis 2: Deteksi CSSOM (CSS Object Model)
+        // Layer 2: CSSOM (CSS Object Model) Detection
         const bodyStyle = window.getComputedStyle(body);
         const rootStyle = window.getComputedStyle(html);
 
         if (rootStyle.colorScheme.includes('dark') || bodyStyle.colorScheme.includes('dark')) return true;
 
-        // Helper: Kalkulator Luminance (YIQ Formula)
+        // Helper: luminance calculator (YIQ formula)
         const getBrightness = (colorStr) => {
             const match = colorStr.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
             if (match) {
-                // Abaikan warna dengan alpha channel 0 (transparan murni)
+                // Ignore colors with zero alpha (fully transparent)
                 if (colorStr.includes('rgba') && parseFloat(colorStr.split(',')[3]) === 0) return null;
                 return ((parseInt(match[1]) * 299) + (parseInt(match[2]) * 587) + (parseInt(match[3]) * 114)) / 1000;
             }
             return null;
         };
 
-        // Lapis 3: Deteksi Warna Teks (Paling Akurat)
-        // Jika warna default teks adalah putih/terang, sudah pasti background-nya gelap.
+        // Layer 3: Text Color Detection (Most Accurate)
+        // If the default text color is white/bright, the background is certainly dark.
         const textBrightness = getBrightness(bodyStyle.color);
         if (textBrightness !== null && textBrightness > 170) return true;
 
-        // Lapis 4: Deteksi Native Background Color
+        // Layer 4: Native Background Color Detection
         const bgBrightness = getBrightness(bodyStyle.backgroundColor) ?? getBrightness(rootStyle.backgroundColor);
         if (bgBrightness !== null && bgBrightness < 128) return true;
 
-        // Jika semua cek gagal, asumsikan web masih menggunakan Light Mode
+        // If all checks fail, assume the site still uses Light Mode
         return false;
     };
 
@@ -53,7 +53,7 @@ export function applySmartDarkMode() {
         if (document.getElementById('devkita-dark-theme')) return;
         const style = document.createElement('style');
         style.id = 'devkita-dark-theme';
-        // Menambahkan isolasi selector untuk mencegah bleed-out
+        // Scoped selectors to prevent bleed-out
         style.textContent = `
       html {
         filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%) !important;
@@ -75,24 +75,23 @@ export function applySmartDarkMode() {
         const isAlreadyDark = evaluateTheme();
 
         if (isAlreadyDark) {
-            removeCSS(); // Cabut injeksi jika terdeteksi native dark mode
+            removeCSS(); // Remove the injection when native dark mode is detected
         } else {
-            injectCSS(); // Eksekusi injeksi jika web memang terang
+            injectCSS(); // Inject only when the site is actually light
         }
     };
 
-    // 1. Eksekusi Inisial
+    // 1. Initial Run
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', checkAndApply);
     } else {
         checkAndApply();
     }
 
-    // 2. Eksekusi Reaktif (MutationObserver untuk SPA)
-    // Memantau perubahan atribut pada root level tanpa mengorbankan main thread performance.
+    // 2. Reactive Run (MutationObserver for SPAs)
+    // Watches root-level attribute changes without hurting main-thread performance.
     const observer = new MutationObserver(() => {
-        // Debounce/Throttle sederhana tidak diperlukan di sini karena 
-        // operasi evaluateTheme memiliki kompleksitas waktu O(1).
+        // No debounce/throttle needed here since evaluateTheme is O(1).
         checkAndApply();
     });
 
@@ -107,7 +106,7 @@ export function applySmartDarkMode() {
         });
     }
 
-    // Simpan instance ke global scope agar garbage collector bisa membersihkannya nanti
+    // Store the instance on the global scope so it can be cleaned up later
     window.__DEVKITA_DARK_OBSERVER = observer;
 }
 

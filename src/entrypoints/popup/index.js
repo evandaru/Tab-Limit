@@ -29,7 +29,7 @@ function initPopupTabs() {
         targetPane.classList.add("active");
       }
 
-      // Jika berpindah ke tab analitik, segarkan data
+      // Refresh data when switching to the analytics tab
       if (targetId === "tabAnalytics") {
         await renderTimeAnalytics(activeTimeframe);
       }
@@ -38,10 +38,10 @@ function initPopupTabs() {
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
-  // Inisialisasi navigasi tab
+  // Initialize tab navigation
   initPopupTabs();
 
-  // Inisialisasi fitur kontrol yang ada
+  // Initialize existing control features
   await initFocusModeUI();
   await initDarkModeUI();
   await initLinkCleanerUI();
@@ -51,19 +51,19 @@ document.addEventListener("DOMContentLoaded", async () => {
   initResponsiveTesterUI();
   initPomodoroPopupUI();
 
-  // Inisialisasi Dashboard Analitik
+  // Initialize Analytics Dashboard
   initTimeframeFilters((selectedFilter) => {
     activeTimeframe = selectedFilter;
   });
 
-  // Render awal analitik
+  // Initial analytics render
   await renderTimeAnalytics(activeTimeframe);
 
-  // Tombol Refresh Analitik
+  // Analytics Refresh Button
   const refreshAnalyticsBtn = document.getElementById("refreshAnalyticsBtn");
   if (refreshAnalyticsBtn) {
     refreshAnalyticsBtn.addEventListener("click", async () => {
-      refreshAnalyticsBtn.innerText = "⏳ Memuat...";
+      refreshAnalyticsBtn.innerText = "⏳ Loading...";
       await renderTimeAnalytics(activeTimeframe);
       setTimeout(() => {
         refreshAnalyticsBtn.innerText = "🔄 Refresh";
@@ -71,7 +71,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
   }
 
-  // Tombol Buka Dashboard Lengkap (di kedua tab)
+  // Open Full Dashboard Buttons (on both tabs)
   const openDashboardBtn = document.getElementById("openDashboardBtn");
   if (openDashboardBtn) {
     openDashboardBtn.addEventListener("click", () => {
@@ -86,7 +86,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
   }
 
-  // Pengaturan Fitur Tab Focus (New Tab)
+  // Tab Focus Feature Setting (New Tab)
   const tabFocusCheckbox = document.getElementById("tabFocusEnabled");
   if (tabFocusCheckbox) {
     chrome.storage.sync.get({ tabFocusEnabled: true }, (res) => {

@@ -11,7 +11,7 @@ const PALETTE = [
 ];
 
 /**
- * Mengambil data analitik dari chrome.storage.local dan mengagregasi berdasarkan filter waktu
+ * Fetches analytics data from chrome.storage.local and aggregates it by time filter
  * @param {'today' | 'week' | 'month' | 'year' | 'all'} filter 
  */
 export async function getAggregatedAnalytics(filter = "today") {
@@ -22,10 +22,17 @@ export async function getAggregatedAnalytics(filter = "today") {
 
   let totalTime = 0;
   let distractions = 0;
+  let tabsOpened = 0;
+  let tabsClosed = 0;
+  let peakTabs = 0;
+  let firstSeen = null;
+  let lastSeen = null;
+  let activeDays = 0;
+  const hourly = {};
   const domains = {};
-  const dailyHistory = {}; // dateStr -> totalSeconds
+  const dailyHistory = {}; // dateStr -> { totalTime, tabsOpened, tabsClosed, peakTabs }
 
-  // Ambil semua entri analytics_YYYY-MM-DD
+  // Collect all analytics_YYYY-MM-DD entries
   const dateKeys = Object.keys(allData).filter(
     (k) => k.startsWith("analytics_") && k.length === 20
   );
@@ -55,9 +62,43 @@ export async function getAggregatedAnalytics(filter = "today") {
 
     if (include) {
       const entryTime = entry.totalTime || 0;
+      const entryOpened = entry.tabsOpened || 0;
+      const entryClosed = entry.tabsClosed || 0;
       totalTime += entryTime;
       distractions += entry.distractions || 0;
-      dailyHistory[dateStr] = (dailyHistory[dateStr] || 0) + entryTime;
+      tabsOpened += entryOpened;
+      tabsClosed += entryClosed;
+
+      if (typeof entry.peakTabs === "number" && entry.peakTabs > peakTabs) {
+        peakTabs = entry.peakTabs;
+      }
+      if (entry.firstSeen && (!firstSeen || entry.firstSeen < firstSeen)) {
+        firstSeen = entry.firstSeen;
+      }
+      if (entry.lastSeen && (!lastSeen || entry.lastSeen > lastSeen)) {
+        lastSeen = entry.lastSeen;
+      }
+      if (entry.hourly && typeof entry.hourly === "object") {
+        for (const [h, sec] of Object.entries(entry.hourly)) {
+          hourly[h] = (hourly[h] || 0) + (sec || 0);
+        }
+      }
+      if (entryTime > 0 || entryOpened > 0 || entry.firstSeen) {
+        activeDays += 1;
+      }
+
+      const prev = dailyHistory[dateStr] || {
+        totalTime: 0,
+        tabsOpened: 0,
+        tabsClosed: 0,
+        peakTabs: 0,
+      };
+      dailyHistory[dateStr] = {
+        totalTime: prev.totalTime + entryTime,
+        tabsOpened: prev.tabsOpened + entryOpened,
+        tabsClosed: prev.tabsClosed + entryClosed,
+        peakTabs: Math.max(prev.peakTabs || 0, entry.peakTabs || 0),
+      };
 
       if (entry.domains) {
         for (const [domain, sec] of Object.entries(entry.domains)) {
@@ -68,26 +109,64 @@ export async function getAggregatedAnalytics(filter = "today") {
   });
 
   const allTimeTotal = Math.max(allData.allTimeTotal || 0, totalTime);
+  const allTimeTabsOpened = Math.max(
+    allData.allTimeTabsOpened || 0,
+    tabsOpened
+  );
+  const allTimeTabsClosed = Math.max(
+    allData.allTimeTabsClosed || 0,
+    tabsClosed
+  );
+
+  // Streak: consecutive active days ending today
+  // (or yesterday if today has no activity yet).
+  const hasActivity = (dateStr) => {
+    const e = allData[`analytics_${dateStr}`];
+    if (!e) return false;
+    return (e.totalTime || 0) > 0 || (e.tabsOpened || 0) > 0 || !!e.firstSeen;
+  };
+  const fmtDate = (d) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+      d.getDate()
+    ).padStart(2, "0")}`;
+  let streak = 0;
+  const cursor = new Date(todayDateStr + "T00:00:00");
+  if (!hasActivity(todayDateStr)) cursor.setDate(cursor.getDate() - 1);
+  while (streak < 3650) {
+    if (!hasActivity(fmtDate(cursor))) break;
+    streak += 1;
+    cursor.setDate(cursor.getDate() - 1);
+  }
 
   return {
     filter,
     totalTime,
     distractions,
+    tabsOpened,
+    tabsClosed,
+    peakTabs,
+    hourly,
+    firstSeen,
+    lastSeen,
+    activeDays,
+    streak,
     domains,
     dailyHistory,
     allTimeTotal,
+    allTimeTabsOpened,
+    allTimeTabsClosed,
   };
 }
 
 /**
- * Menghasilkan SVG Donut Chart modern berdasarkan domain teratas
+ * Generates a modern SVG donut chart of the top domains
  */
 function generateDonutChartSvg(sortedDomains, totalTime) {
   if (sortedDomains.length === 0 || totalTime <= 0) {
     return `
       <div class="empty-chart-state" style="text-align: center; padding: 24px 10px; color: var(--text-muted, #64748b); font-size: 12px;">
         <div style="font-size: 28px; margin-bottom: 6px;">📊</div>
-        Belum ada data aktivitas untuk periode ini.
+        No activity data for this period.
       </div>
     `;
   }
@@ -98,7 +177,7 @@ function generateDonutChartSvg(sortedDomains, totalTime) {
   const strokeWidth = 16;
   const circumference = 2 * Math.PI * radius;
 
-  // Ambil top 5 domain, sisanya digabung ke 'Lainnya'
+  // Take the top 5 domains, merge the rest into 'Others'
   const topSegments = [];
   let accountedTime = 0;
   sortedDomains.slice(0, 5).forEach(([dom, sec], idx) => {
@@ -114,7 +193,7 @@ function generateDonutChartSvg(sortedDomains, totalTime) {
   const otherTime = totalTime - accountedTime;
   if (otherTime > 0 && sortedDomains.length > 5) {
     topSegments.push({
-      domain: "Lainnya",
+      domain: "Others",
       time: otherTime,
       color: PALETTE[PALETTE.length - 1],
       percent: (otherTime / totalTime) * 100,
@@ -171,7 +250,7 @@ function generateDonutChartSvg(sortedDomains, totalTime) {
         </svg>
         <div style="position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; text-align: center;">
           <span style="font-size: 14px; font-weight: 700; color: var(--text-main, #334155);">${formattedTotal}</span>
-          <span style="font-size: 9px; color: var(--text-muted, #64748b); text-transform: uppercase; letter-spacing: 0.5px;">Waktu</span>
+          <span style="font-size: 9px; color: var(--text-muted, #64748b); text-transform: uppercase; letter-spacing: 0.5px;">Time</span>
         </div>
       </div>
       <div class="chart-legend-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px 10px; width: 100%;">
@@ -189,26 +268,42 @@ export async function renderTimeAnalytics(timeframe = "today") {
   const statTodayTime = document.getElementById("statTodayTime");
   const statAllTime = document.getElementById("statAllTime");
   const statDistractions = document.getElementById("statDistractions");
+  const statTabsOpened = document.getElementById("statTabsOpened");
+  const statTabsClosed = document.getElementById("statTabsClosed");
+  const statAllTabsOpened = document.getElementById("statAllTabsOpened");
+  const statAllTabsClosed = document.getElementById("statAllTabsClosed");
   const domainRankingEl = document.getElementById("domainRanking");
   const chartContainer = document.getElementById("analyticsChartContainer");
   const statTimeframeLabel = document.getElementById("statTimeframeLabel");
+  const statTabLabel = document.getElementById("statTabLabel");
   const topDomainStat = document.getElementById("statTopDomain");
 
   const data = await getAggregatedAnalytics(timeframe);
 
   const filterLabels = {
-    today: "Waktu (Hari Ini)",
-    week: "Waktu (7 Hari)",
-    month: "Waktu (Bulan Ini)",
-    year: "Waktu (Tahun Ini)",
-    all: "Total Keseluruhan",
+    today: "Time (Today)",
+    week: "Time (7 Days)",
+    month: "Time (This Month)",
+    year: "Time (This Year)",
+    all: "All Time",
+  };
+
+  const tabFilterLabels = {
+    today: "Tabs (Today)",
+    week: "Tabs (7 Days)",
+    month: "Tabs (This Month)",
+    year: "Tabs (This Year)",
+    all: "All Tabs",
   };
 
   if (statTimeframeLabel) {
-    statTimeframeLabel.innerText = filterLabels[timeframe] || "Waktu Pemakaian";
+    statTimeframeLabel.innerText = filterLabels[timeframe] || "Usage Time";
+  }
+  if (statTabLabel) {
+    statTabLabel.innerText = tabFilterLabels[timeframe] || "Tabs Opened / Closed";
   }
 
-  // Update Stat Cards
+  // Update stat cards
   if (statTodayTime) {
     statTodayTime.innerText = formatTime(data.totalTime);
   }
@@ -218,8 +313,20 @@ export async function renderTimeAnalytics(timeframe = "today") {
   if (statDistractions) {
     statDistractions.innerText = data.distractions;
   }
+  if (statTabsOpened) {
+    statTabsOpened.innerText = data.tabsOpened;
+  }
+  if (statTabsClosed) {
+    statTabsClosed.innerText = data.tabsClosed;
+  }
+  if (statAllTabsOpened) {
+    statAllTabsOpened.innerText = data.allTimeTabsOpened;
+  }
+  if (statAllTabsClosed) {
+    statAllTabsClosed.innerText = data.allTimeTabsClosed;
+  }
 
-  // Urutkan domain berdasarkan durasi menurun
+  // Sort domains by duration, descending
   const sortedDomains = Object.entries(data.domains).sort(
     ([, timeA], [, timeB]) => timeB - timeA
   );
@@ -232,19 +339,19 @@ export async function renderTimeAnalytics(timeframe = "today") {
     }
   }
 
-  // Render Chart Container
+  // Render chart container
   if (chartContainer) {
     chartContainer.innerHTML = generateDonutChartSvg(sortedDomains, data.totalTime);
   }
 
-  // Render Domain Ranking
+  // Render domain ranking
   if (domainRankingEl) {
     domainRankingEl.innerHTML = "";
 
     if (sortedDomains.length === 0) {
       domainRankingEl.innerHTML = `
         <li class="ranking-item" style="justify-content: center; color: var(--text-muted, #94a3b8); padding: 14px 0; font-size: 13px; text-align: center; list-style: none;">
-          Belum ada aktivitas terekam.
+          No recorded activity yet.
         </li>`;
       return;
     }
@@ -280,7 +387,7 @@ export async function renderTimeAnalytics(timeframe = "today") {
 }
 
 /**
- * Inisialisasi event listener tombol-tombol filter periode
+ * Initializes the period filter button listeners
  */
 export function initTimeframeFilters(onFilterChange) {
   const filterBtns = document.querySelectorAll(".timeframe-filter-btn");

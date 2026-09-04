@@ -5,12 +5,12 @@ export async function initDarkModeUI() {
 
     if (!darkEnabledEl || !darkExcludedEl || !saveBtn) return;
 
-    // Load data saat popup dibuka
+    // Load data when the popup opens
     const data = await chrome.storage.sync.get(["darkEnabled", "darkExcluded"]);
     darkEnabledEl.checked = data.darkEnabled ?? false;
     darkExcludedEl.value = (data.darkExcluded ?? []).join("\n");
 
-    // Nebeng ke tombol "Simpan Pengaturan" yang sudah ada
+    // Piggybacks on the existing Save Settings button
     saveBtn.addEventListener("click", async () => {
         const rawSites = darkExcludedEl.value.split(/\r?\n|,/);
         const sanitizedSites = rawSites

@@ -98,7 +98,7 @@ export function initDomExtractorUI() {
     copyMdBtn.addEventListener("click", async () => {
       try {
         const originalText = copyMdBtn.innerText;
-        copyMdBtn.innerText = "⏳ Memproses...";
+        copyMdBtn.innerText = "⏳ Processing...";
         copyMdBtn.disabled = true;
 
         const [activeTab] = await chrome.tabs.query({
@@ -107,7 +107,7 @@ export function initDomExtractorUI() {
         });
 
         if (!activeTab) {
-          throw new Error("Tidak ada tab aktif.");
+          throw new Error("No active tab.");
         }
 
         const injectionResults = await chrome.scripting.executeScript({
@@ -194,9 +194,9 @@ export function initDomExtractorUI() {
 
         const articleContent =
           injectionResults[0]?.result ||
-          "Konten gagal diekstrak atau halaman kosong.";
+          "Content could not be extracted or the page is empty.";
 
-        const dateStr = new Date().toLocaleDateString("id-ID", {
+        const dateStr = new Date().toLocaleDateString("en-US", {
           year: "numeric",
           month: "long",
           day: "numeric",
@@ -207,21 +207,21 @@ export function initDomExtractorUI() {
         );
 
         let finalMdContent = `# ${safeTitle}\n\n`;
-        finalMdContent += `> **URL Referensi:** [Tautan](${activeTab.url})\n`;
-        finalMdContent += `> **Tanggal Arsip:** ${dateStr}\n\n`;
+        finalMdContent += `> **Reference URL:** [Link](${activeTab.url})\n`;
+        finalMdContent += `> **Archived on:** ${dateStr}\n\n`;
         finalMdContent += `---\n\n`;
         finalMdContent += articleContent;
 
         await navigator.clipboard.writeText(finalMdContent);
 
-        copyMdBtn.innerText = "✅ Berhasil Disalin!";
+        copyMdBtn.innerText = "✅ Copied!";
         setTimeout(() => {
           copyMdBtn.innerText = originalText;
           copyMdBtn.disabled = false;
         }, 2000);
       } catch (error) {
-        console.error("Kesalahan saat parsing DOM atau menyalin:", error);
-        copyMdBtn.innerText = "❌ Gagal Menyalin";
+        console.error("Error while parsing the DOM or copying:", error);
+        copyMdBtn.innerText = "❌ Copy Failed";
         setTimeout(() => {
           copyMdBtn.innerText = "📋 Copy Blog as .md";
           copyMdBtn.disabled = false;
@@ -234,14 +234,14 @@ export function initDomExtractorUI() {
     pasteHtmlBtn.addEventListener("click", async () => {
       try {
         const originalText = pasteHtmlBtn.innerText;
-        pasteHtmlBtn.innerText = "⏳ Membaca Memory...";
+        pasteHtmlBtn.innerText = "⏳ Reading Memory...";
         pasteHtmlBtn.disabled = true;
 
         const clipboardText = await navigator.clipboard.readText();
 
         if (!clipboardText || clipboardText.trim() === "") {
           throw new Error(
-            "Buffer clipboard kosong atau tidak berisi string yang valid.",
+            "Clipboard buffer is empty or does not contain a valid string.",
           );
         }
 
@@ -268,17 +268,17 @@ export function initDomExtractorUI() {
           URL.revokeObjectURL(objectUrl);
         }, 150);
 
-        pasteHtmlBtn.innerText = "File HTML Dibuat!";
+        pasteHtmlBtn.innerText = "HTML File Created!";
         setTimeout(() => {
           pasteHtmlBtn.innerText = originalText;
           pasteHtmlBtn.disabled = false;
         }, 2000);
       } catch (error) {
         console.error(
-          "Kesalahan arsitektural saat membaca clipboard atau operasi I/O:",
+          "Architectural error while reading the clipboard or I/O:",
           error,
         );
-        pasteHtmlBtn.innerText = "Clipboard Kosong / Ditolak";
+        pasteHtmlBtn.innerText = "Clipboard Empty / Denied";
         setTimeout(() => {
           pasteHtmlBtn.innerText = "Paste Code as .html";
           pasteHtmlBtn.disabled = false;

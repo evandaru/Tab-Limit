@@ -1,6 +1,6 @@
 /**
  * Responsive Tester Module
- * Membuka URL tab aktif di jendela baru dengan dimensi perangkat standar industri.
+ * Opens the active tab URL in a new window with industry-standard device dimensions.
  */
 
 const DEVICE_CONFIGS = {
@@ -13,7 +13,7 @@ export function initResponsiveTesterUI() {
     const container = document.getElementById("responsiveTesterContainer");
     if (!container) return;
 
-    // Menggunakan Event Delegation untuk performa yang lebih baik
+    // Uses event delegation for better performance
     container.addEventListener("click", async (event) => {
         const btn = event.target.closest("button[data-device]");
         if (!btn) return;
@@ -28,18 +28,18 @@ export function initResponsiveTesterUI() {
             btn.innerText = "⏳";
             btn.disabled = true;
 
-            // Ambil metadata tab yang sedang aktif
+            // Grab the active tab metadata
             const [activeTab] = await chrome.tabs.query({
                 active: true,
                 currentWindow: true
             });
 
-            // Validasi protokol URL untuk mencegah eksekusi di halaman internal browser
+            // Validate the URL protocol to prevent running on internal browser pages
             if (!activeTab || !activeTab.url || activeTab.url.startsWith("chrome://")) {
                 throw new Error("Invalid protocol for responsive testing.");
             }
 
-            // Eksekusi window baru dengan dimensi presisi
+            // Launch a new window with precise dimensions
             await chrome.windows.create({
                 url: activeTab.url,
                 width: config.width,
@@ -48,14 +48,14 @@ export function initResponsiveTesterUI() {
                 focused: true
             });
 
-            // Kembalikan state UI
+            // Restore UI state
             btn.innerText = originalText;
             btn.disabled = false;
 
         } catch (error) {
             console.error("[Responsive Tester] Operation failed:", error);
             const originalText = btn.innerText;
-            btn.innerText = "❌ Gagal";
+            btn.innerText = "❌ Failed";
             setTimeout(() => {
                 btn.innerText = originalText;
                 btn.disabled = false;

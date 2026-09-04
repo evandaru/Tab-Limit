@@ -1,6 +1,6 @@
 /**
  * Pomodoro Visual Engine
- * Menangani rendering karakter dan gelembung chat 8-Bit.
+ * Renders the character and the 8-bit chat bubble.
  */
 export function applyPomodoroOverlay() {
     if (window.__DEVKITA_POMO_ENGINE) return;
@@ -29,7 +29,7 @@ export function applyPomodoroOverlay() {
     const textNode = document.createElement('span');
     bubble.appendChild(textNode);
 
-    // Ekor Bubble
+    // Bubble tail
     const tail = document.createElement('div');
     tail.style.cssText = `
     position: absolute; bottom: -12px; right: 20px;
@@ -39,11 +39,11 @@ export function applyPomodoroOverlay() {
   `;
     bubble.appendChild(tail);
 
-    // Karakter
+    // Character
     const character = document.createElement('img');
     character.style.cssText = `object-fit: contain; transition: width 0.2s ease; pointer-events: auto;`;
 
-    // Sembunyikan widget sepenuhnya saat di-hover dan biarkan klik tembus
+    // Fully hide the widget on hover and let clicks pass through
     container.addEventListener('mouseover', () => {
         container.style.opacity = '0';
         bubble.style.pointerEvents = 'none';
@@ -51,7 +51,7 @@ export function applyPomodoroOverlay() {
 
         const checkMouseLeave = (e) => {
             const rect = container.getBoundingClientRect();
-            // Beri sedikit padding (20px) agar tidak terlalu sensitif
+            // Add a little padding (20px) so it is not too sensitive
             const pad = 20;
             if (e.clientX < rect.left - pad || e.clientX > rect.right + pad || 
                 e.clientY < rect.top - pad || e.clientY > rect.bottom + pad) {
@@ -70,9 +70,9 @@ export function applyPomodoroOverlay() {
     container.appendChild(character);
     document.documentElement.appendChild(container);
 
-    // Fungsi Sinkronisasi Visual
+    // Visual sync function
     const updateVisuals = () => {
-        // Hapus 'pomoImage' dari daftar get
+        // 'pomoImage' was removed from the get list
         chrome.storage.local.get(['pomoEnabled', 'pomoSize', 'pomoText', 'pomoTimeLeft'], (data) => {
             if (!data.pomoEnabled) {
                 container.style.display = 'none';
@@ -81,19 +81,19 @@ export function applyPomodoroOverlay() {
 
             container.style.display = 'flex';
 
-            // PAKAI GAMBAR STATIS DARI ASSETS
+            // USE THE STATIC IMAGE FROM ASSETS
             character.src = chrome.runtime.getURL('assets/kucing.gif');
             character.style.width = `${data.pomoSize || 120}px`;
 
-            // Kalkulasi Waktu (Format MM:SS)
+            // Time calculation (MM:SS format)
             const timeLeft = data.pomoTimeLeft || 0;
             const minutes = Math.floor(timeLeft / 60).toString().padStart(2, '0');
             const seconds = (timeLeft % 60).toString().padStart(2, '0');
 
-            const customText = data.pomoText || "mangat2";
+            const customText = data.pomoText || "stay focused";
 
-            // Merender Teks Custom + Waktu Mundur
-            textNode.innerHTML = `${customText}<br>kurang ${minutes}:${seconds}`;
+            // Renders custom text + countdown
+            textNode.innerHTML = `${customText}<br>${minutes}:${seconds} left`;
 
             bubble.style.opacity = '1';
             bubble.style.transform = 'translateY(0)';
@@ -102,7 +102,7 @@ export function applyPomodoroOverlay() {
 
     updateVisuals();
 
-    // Karena background.js (tick()) selalu memperbarui `pomoTimeLeft` setiap 1 detik,
-    // listener ini akan ter-trigger setiap detik dan mengubah waktu di Bubble.
+    // Since background.js (tick()) updates `pomoTimeLeft` every second,
+    // this listener fires every second and updates the bubble time.
     chrome.storage.onChanged.addListener(updateVisuals);
 }

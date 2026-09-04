@@ -13,7 +13,7 @@ export async function renderQuotes(showAll = false) {
   quoteListEl.innerHTML = "";
 
   if (quotes.length === 0) {
-    quoteListEl.innerHTML = `<div class="empty-state"><p>Tidak ada kutipan tersimpan.</p></div>`;
+    quoteListEl.innerHTML = `<div class="empty-state"><p>No saved quotes yet.</p></div>`;
     seeMoreContainer.style.display = "none";
     [exportBtn, copyMdBtn].forEach((btn) => {
       if (btn) {
@@ -46,7 +46,7 @@ export async function renderQuotes(showAll = false) {
   }
 
   itemsToRender.forEach((quote) => {
-    const dateStr = new Date(quote.timestamp).toLocaleString("id-ID", {
+    const dateStr = new Date(quote.timestamp).toLocaleString("en-US", {
       day: "2-digit",
       month: "long",
       year: "numeric",
@@ -93,14 +93,14 @@ export async function generateMarkdownString() {
   const quotes = await StorageAPI.getQuotes();
   if (quotes.length === 0) return null;
 
-  let mdContent = `# Kumpulan Kutipan\n\n*Diekspor pada ${new Date().toLocaleString("id-ID")}*\n\n---\n\n`;
+  let mdContent = `# Quote Collection\n\n*Exported on ${new Date().toLocaleString("en-US")}*\n\n---\n\n`;
 
   quotes
     .slice()
     .reverse()
     .forEach((quote) => {
-      const dateStr = new Date(quote.timestamp).toLocaleString("id-ID");
-      mdContent += `${quote.text}\n\n**Sumber:** [${quote.url}](${quote.url})\n\n**Tanggal:** ${dateStr}\n\n---\n\n`;
+      const dateStr = new Date(quote.timestamp).toLocaleString("en-US");
+      mdContent += `${quote.text}\n\n**Source:** [${quote.url}](${quote.url})\n\n**Date:** ${dateStr}\n\n---\n\n`;
     });
 
   return mdContent;
@@ -120,7 +120,7 @@ export function initDashboardUI() {
 
   if (clearBtn) {
     clearBtn.addEventListener("click", async () => {
-      if (confirm("Yakin ingin menghapus semua kutipan?")) {
+      if (confirm("Are you sure you want to delete all quotes?")) {
         await StorageAPI.clearQuotes();
         await renderQuotes();
       }
@@ -135,7 +135,7 @@ export function initDashboardUI() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `kutipan-${new Date().toISOString().split("T")[0]}.md`;
+      a.download = `quotes-${new Date().toISOString().split("T")[0]}.md`;
       document.body.appendChild(a);
       a.click();
       setTimeout(() => {
@@ -149,14 +149,14 @@ export function initDashboardUI() {
     copyMdBtn.addEventListener("click", async () => {
       try {
         const originalText = copyMdBtn.innerText;
-        copyMdBtn.innerText = "⏳ Menyalin...";
+        copyMdBtn.innerText = "⏳ Copying...";
         const mdContent = await generateMarkdownString();
-        if (!mdContent) throw new Error("Kosong");
+        if (!mdContent) throw new Error("Empty");
         await navigator.clipboard.writeText(mdContent);
-        copyMdBtn.innerText = "✅ Tersalin!";
+        copyMdBtn.innerText = "✅ Copied!";
         setTimeout(() => (copyMdBtn.innerText = originalText), 2000);
       } catch (error) {
-        copyMdBtn.innerText = "❌ Gagal";
+        copyMdBtn.innerText = "❌ Failed";
         setTimeout(() => (copyMdBtn.innerText = "Copy Quotes"), 2000);
       }
     });

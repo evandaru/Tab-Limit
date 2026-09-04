@@ -1,9 +1,9 @@
 import { triggerBadgeFeedback } from "../../shared/utils/ui-feedback.js";
 
 /**
- * Core Engine yang diinjeksi ke dalam DOM halaman.
- * Fungsi ini harus berifat self-contained (tidak memiliki dependensi eksternal) 
- * karena dieksekusi di isolated environment melalui chrome.scripting.
+ * Core engine injected into the page DOM.
+ * Must stay self-contained (no external dependencies)
+ * since it runs in an isolated environment via chrome.scripting.
  */
 function fakeFillerEngine(customConfig = {}) {
   // --- 1. Data Generators (Internal Faker) ---
@@ -32,7 +32,7 @@ function fakeFillerEngine(customConfig = {}) {
     }
   };
 
-  // --- 2. Rule Engine (Konfigurasi Pola Matcher) ---
+  // --- 2. Rule Engine (pattern matcher config) ---
   const defaultRules = [
     { match: /first.?name|fname/i, type: 'text', generate: generators.firstName },
     { match: /last.?name|lname/i, type: 'text', generate: generators.lastName },
@@ -47,18 +47,18 @@ function fakeFillerEngine(customConfig = {}) {
     { match: /date|dob|birth/i, type: 'text', generate: generators.date },
   ];
 
-  // Gabungkan rules bawaan dengan custom config (jika ada dari parameter)
+  // Merge built-in rules with custom config (if passed via params)
   const rules = [...(customConfig.rules || []), ...defaultRules];
 
   // --- 3. DOM Utilities & Framework Bypasser ---
 
-  // React/Vue sering melakukan override pada setter 'value' di level prototipe.
-  // Kita perlu memanggil native setter agar framework mendeteksi perubahan.
+  // React/Vue often override the 'value' setter at prototype level.
+  // We must call the native setter so frameworks detect the change.
   const setNativeValue = (element, value) => {
     let prototype = Object.getPrototypeOf(element);
     let descriptor = Object.getOwnPropertyDescriptor(prototype, 'value');
 
-    // Fallback traversal prototype chain jika descriptor tidak ditemukan
+    // Fallback: traverse the prototype chain if the descriptor is missing
     while (!descriptor && prototype !== null) {
       prototype = Object.getPrototypeOf(prototype);
       if (prototype) descriptor = Object.getOwnPropertyDescriptor(prototype, 'value');
@@ -105,22 +105,22 @@ function fakeFillerEngine(customConfig = {}) {
     }
 
     if (el.type === 'checkbox' || el.type === 'radio') {
-      // Untuk radio, hindari men-check semua opsi dengan name yang sama
+      // For radios, avoid checking every option that shares the same name
       if (el.type === 'radio') {
         const siblings = document.querySelectorAll(`input[type="radio"][name="${el.name}"]`);
         if (siblings.length > 0) {
           const randomNode = siblings[Math.floor(Math.random() * siblings.length)];
-          if (randomNode !== el && randomNode.checked) return; // Sudah ada yang ter-check
+          if (randomNode !== el && randomNode.checked) return; // One is already checked
         }
       }
-      el.checked = Math.random() > 0.5 || el.required; // Default: 50% chance, kecuali required
+      el.checked = Math.random() > 0.5 || el.required; // Default: 50% chance, unless required
       el.dispatchEvent(new Event('change', { bubbles: true }));
       return;
     }
 
     let generatedValue = null;
 
-    // Evaluasi spesifik berdasarkan input type bawaan HTML5
+    // Specific evaluation based on native HTML5 input types
     if (el.type === 'email') generatedValue = generators.email(generators.firstName(), generators.lastName());
     else if (el.type === 'number') {
       const min = el.min ? parseFloat(el.min) : 0;
@@ -132,7 +132,7 @@ function fakeFillerEngine(customConfig = {}) {
     else if (el.type === 'date') generatedValue = generators.date();
     else if (el.type === 'password') generatedValue = "TestPass!234"; // Default static complex password
 
-    // Jika tidak tertangkap type spesifik, gunakan Regex Rule Engine
+    // If no specific type matched, use the regex rule engine
     if (!generatedValue) {
       for (const rule of rules) {
         if (rule.match.test(aggregateIdentifier)) {
@@ -142,12 +142,12 @@ function fakeFillerEngine(customConfig = {}) {
       }
     }
 
-    // Fallback terakhir berdasarkan tag
+    // Last fallback based on tag
     if (!generatedValue) {
       generatedValue = el.tagName === 'TEXTAREA' ? generators.paragraph() : generators.firstName();
     }
 
-    // Terapkan value dengan menghormati max-length dan trigger state management framework
+    // Apply the value honoring max-length and triggering framework state management
     setNativeValue(el, enforceConstraints(el, generatedValue));
   };
 
@@ -155,17 +155,17 @@ function fakeFillerEngine(customConfig = {}) {
   document.querySelectorAll('input, select, textarea').forEach(processInput);
 }
 
-// Handler eksekusi dari background/context-menu
+// Execution handler from background/context-menu
 export async function handleFakeFillerMenu(info, tab) {
   if (info.menuItemId === "fake-filler") {
-    // Kita bisa mengambil konfigurasi user (misalnya custom rules dari local storage) 
-    // dan mengirimkannya sebagai argument ke engine.
+    // We can fetch user config (e.g. custom rules from local storage)
+    // and pass it as an argument to the engine.
     const customConfig = {};
 
     await chrome.scripting.executeScript({
       target: { tabId: tab.id },
       func: fakeFillerEngine,
-      args: [customConfig] // Passing data dari service worker ke isolated page environment
+      args: [customConfig] // Passing data from the service worker to the isolated page environment
     });
 
     triggerBadgeFeedback(tab.id, "Filled", "#ffc107");

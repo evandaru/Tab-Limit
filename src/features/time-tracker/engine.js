@@ -10,6 +10,12 @@ export async function recordDistractionAttempt() {
     totalTime: 0,
     domains: {},
     distractions: 0,
+    tabsOpened: 0,
+    tabsClosed: 0,
+    peakTabs: 0,
+    hourly: {},
+    firstSeen: null,
+    lastSeen: null,
   };
   todayData.distractions += 1;
   await chrome.storage.local.set({ [todayKey]: todayData });
@@ -29,12 +35,27 @@ async function commitSessionTime() {
       totalTime: 0,
       domains: {},
       distractions: 0,
+      tabsOpened: 0,
+      tabsClosed: 0,
+      peakTabs: 0,
+      hourly: {},
+      firstSeen: null,
+      lastSeen: null,
     };
     const allTimeTotal = (data.allTimeTotal || 0) + durationSecs;
 
     todayData.totalTime += durationSecs;
     todayData.domains[activeSession.domain] =
       (todayData.domains[activeSession.domain] || 0) + durationSecs;
+
+    // Rhythm: split the duration into the current hour + record first/last seen
+    if (!todayData.hourly || typeof todayData.hourly !== "object") {
+      todayData.hourly = {};
+    }
+    const hour = new Date(now).getHours();
+    todayData.hourly[hour] = (todayData.hourly[hour] || 0) + durationSecs;
+    if (!todayData.firstSeen) todayData.firstSeen = activeSession.startTime;
+    todayData.lastSeen = now;
 
     await chrome.storage.local.set({
       [todayKey]: todayData,
