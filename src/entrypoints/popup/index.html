@@ -361,7 +361,7 @@
     <div class="row">
       <label class="checkbox-label">
         <input type="checkbox" id="tabFocusEnabled" />
-        Enable Tab Focus (Custom New Tab)
+        Enable Tab Focus Portal
       </label>
     </div>
 
@@ -376,6 +376,20 @@
       <label class="checkbox-label">
         <input type="checkbox" id="cleanerEnabled" />
         Enable Link Cleaner (Remove Trackers)
+      </label>
+    </div>
+
+    <div class="row">
+      <label class="checkbox-label">
+        <input type="checkbox" id="shortsBlockEnabled" />
+        Block YouTube Shorts (Hide + Redirect)
+      </label>
+    </div>
+
+    <div class="row">
+      <label class="checkbox-label">
+        <input type="checkbox" id="xTrendingBlockEnabled" checked />
+        Hide X Trending & What's happening
       </label>
     </div>
 
@@ -429,7 +443,6 @@
     </div>
 
     <hr>
-    <button id="saveBtn">💾 Save Settings</button>
     <button id="copyMdBtn" class="btn-success">📝 Copy Blog as .md</button>
     <button id="pasteHtmlBtn" class="btn-secondary" style="color: #0284c7;">
       🌐 Paste Code as .html
@@ -438,8 +451,24 @@
       🔗 Copy All Links
     </button>
     <button id="openTabFocusBtn" class="btn-secondary" style="color: #2563eb; font-weight: 700;">
-      🌟 Open Tab Focus (New Tab)
+      🌟 Open Tab Focus Portal
     </button>
+    <button id="openVaultBtn" class="btn-secondary" style="color: #0f766e; font-weight: 700;">
+      🔐 Secure Pages (Password Notes &amp; Sheets)
+    </button>
+    <button id="openSitesBtn" class="btn-secondary" style="color: #b45309; font-weight: 700;">
+      🔒 Protected Sites (Password Whitelist)
+    </button>
+    <div style="margin-top: 8px; font-size: 11px; color: var(--text-muted); text-align: left;">
+      <label for="protectLinkInput" style="display: block; margin-bottom: 4px;">Protect a Google Sheets link with a password</label>
+      <div style="display: flex; gap: 6px;">
+        <input type="text" id="protectLinkInput" placeholder="https://docs.google.com/spreadsheets/d/..."
+          style="flex: 1; min-width: 0; padding: 6px 8px; font-size: 11px;" />
+        <button id="protectLinkBtn" class="btn-secondary" style="padding: 6px 10px; white-space: nowrap;">
+          🔒 Protect
+        </button>
+      </div>
+    </div>
     <button id="openDashboardBtn" class="btn-secondary">
       📖 Open Quotes Dashboard
     </button>

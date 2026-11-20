@@ -4,11 +4,17 @@ import { initDarkModeUI } from "../../features/dark-mode/popup-ui.js";
 import { initLinkExtractorUI } from "../../features/link-extractor/engine.js";
 import { initResponsiveTesterUI } from "../../features/responsive-tester/ui.js";
 import { initLinkCleanerUI } from "../../features/link-cleaner/popup-ui.js";
+import { initShortsBlockerUI } from "../../features/shorts-blocker/popup-ui.js";
+import { initXTrendingBlockerUI } from "../../features/x-trending-blocker/popup-ui.js";
 import { initPomodoroPopupUI } from "../../features/pomodoro/popup-ui.js";
 import {
   renderTimeAnalytics,
   initTimeframeFilters,
 } from "../../features/time-tracker/analytics-ui.js";
+import {
+  getTabFocusEnabled,
+  setTabFocusEnabled,
+} from "../../features/tab-focus/settings.js";
 
 let activeTimeframe = "today";
 
@@ -45,6 +51,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   await initFocusModeUI();
   await initDarkModeUI();
   await initLinkCleanerUI();
+  await initShortsBlockerUI();
+  await initXTrendingBlockerUI();
 
   initDomExtractorUI();
   initLinkExtractorUI();
@@ -88,21 +96,70 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // Tab Focus Feature Setting (New Tab)
   const tabFocusCheckbox = document.getElementById("tabFocusEnabled");
+  const openTabFocusBtn = document.getElementById("openTabFocusBtn");
+
+  const syncTabFocusUi = (enabled) => {
+    if (!openTabFocusBtn) return;
+    openTabFocusBtn.disabled = !enabled;
+    openTabFocusBtn.style.opacity = enabled ? "1" : "0.5";
+    openTabFocusBtn.style.cursor = enabled ? "pointer" : "not-allowed";
+    openTabFocusBtn.title = enabled
+      ? "Open the Tab Focus portal in a tab"
+      : "Enable Tab Focus Portal first";
+  };
+
   if (tabFocusCheckbox) {
-    chrome.storage.sync.get({ tabFocusEnabled: true }, (res) => {
-      tabFocusCheckbox.checked = res.tabFocusEnabled;
+    tabFocusCheckbox.checked = await getTabFocusEnabled();
+    syncTabFocusUi(tabFocusCheckbox.checked);
+    tabFocusCheckbox.addEventListener("change", async () => {
+      await setTabFocusEnabled(tabFocusCheckbox.checked);
+      syncTabFocusUi(tabFocusCheckbox.checked);
     });
-    tabFocusCheckbox.addEventListener("change", () => {
-      chrome.storage.sync.set({ tabFocusEnabled: tabFocusCheckbox.checked });
-    });
+  } else {
+    syncTabFocusUi(await getTabFocusEnabled());
   }
 
-  const openTabFocusBtn = document.getElementById("openTabFocusBtn");
   if (openTabFocusBtn) {
     openTabFocusBtn.addEventListener("click", () => {
+      if (openTabFocusBtn.disabled) return;
       chrome.tabs.create({
         url: chrome.runtime.getURL("src/entrypoints/newtab/index.html"),
       });
+    });
+  }
+
+  const openVaultBtn = document.getElementById("openVaultBtn");
+  if (openVaultBtn) {
+    openVaultBtn.addEventListener("click", () => {
+      chrome.tabs.create({
+        url: chrome.runtime.getURL("src/entrypoints/vault/index.html"),
+      });
+    });
+  }
+
+  const openSitesBtn = document.getElementById("openSitesBtn");
+  if (openSitesBtn) {
+    openSitesBtn.addEventListener("click", () => {
+      chrome.tabs.create({
+        url: chrome.runtime.getURL("src/entrypoints/sites/index.html"),
+      });
+    });
+  }
+
+  // Shortcut: turn a Google Sheets / Drive link into a password-protected page.
+  const protectLinkInput = document.getElementById("protectLinkInput");
+  const protectLinkBtn = document.getElementById("protectLinkBtn");
+  if (protectLinkInput && protectLinkBtn) {
+    protectLinkBtn.addEventListener("click", () => {
+      const url = protectLinkInput.value.trim();
+      if (!url) return;
+      chrome.tabs.create({
+        url: chrome.runtime.getURL(
+          "src/entrypoints/vault/index.html") + "?url=" + encodeURIComponent(url),
+      });
+    });
+    protectLinkInput.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") protectLinkBtn.click();
     });
   }
 });

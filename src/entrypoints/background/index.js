@@ -8,8 +8,11 @@ import { initContextMenus } from "../../features/quotes-manager/context-menu.js"
 import { initDarkMode } from "../../features/dark-mode/background.js";
 import { initVideoSpeedController } from "../../features/video-speed/background.js";
 import { initLinkCleaner } from "../../features/link-cleaner/background.js";
+import { initShortsBlocker } from "../../features/shorts-blocker/background.js";
+import { initXTrendingBlocker } from "../../features/x-trending-blocker/background.js";
 import { applyPomodoroOverlay } from "../../features/pomodoro/engine.js";
 import { initPomodoro } from "../../features/pomodoro/background.js";
+import { initSiteGate } from "../../features/site-gate/background.js";
 
 function bootstrapServices() {
   console.log("Initializing Service Worker...");
@@ -24,7 +27,10 @@ function bootstrapServices() {
   initDarkMode();
   initVideoSpeedController();
   initLinkCleaner();
+  initShortsBlocker();
+  initXTrendingBlocker();
   initPomodoro();
+  initSiteGate();
 }
 
 bootstrapServices();

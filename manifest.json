@@ -15,7 +15,9 @@
         "unlimitedStorage",
         "bookmarks",
         "topSites",
-        "idle"
+        "idle",
+        "declarativeNetRequest",
+        "webRequest"
     ],
     "host_permissions": [
         "*://*/*"
@@ -29,9 +31,6 @@
             "16": "assets/icon-16.png"
         }
     },
-    "chrome_url_overrides": {
-        "newtab": "src/entrypoints/newtab/index.html"
-    },
     "background": {
         "service_worker": "src/entrypoints/background/index.js",
         "type": "module"
@@ -42,7 +41,9 @@
             "resources": [
                 "assets/chat.png",
                 "assets/icon-16.png",
-                "assets/kucing.gif"
+                "assets/kucing.gif",
+                "src/entrypoints/gate/index.html",
+                "src/entrypoints/gate/index.js"
             ],
             "matches": [
                 "<all_urls>"

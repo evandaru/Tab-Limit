@@ -421,9 +421,105 @@ function initBrowserControls() {
 // ==========================================
 // DOM READY INITIALIZATION
 // ==========================================
-document.addEventListener("DOMContentLoaded", () => {
+function initTabFocusPortal() {
   initPortalClock();
   initBrowserControls();
   initSystemThemeWatcher();
   loadBrowserDashboard();
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  initTabFocusPortal();
 });
+
+// ============================================================================
+// ARCHIVED - NEW TAB OVERRIDE GATING (disabled, kept here for reference)
+//
+// This page is a normal extension page opened from the popup. It used to be
+// registered as `chrome_url_overrides.newtab`, and the `tabFocusEnabled` switch
+// was enforced here: with the feature off, the page tried to hand the tab back
+// to the browser's own new tab page (see handBackToDefaultNtp in
+// ../../features/tab-focus/settings.js) and showed a minimal shell when that
+// was refused.
+//
+// Browser builds disagreed on the hand-back, so the override was removed from
+// manifest.json instead. Uncomment the block below together with the archived
+// functions in features/tab-focus/settings.js to restore it.
+// ============================================================================
+
+// import {
+//   getTabFocusEnabled,
+//   setTabFocusEnabled,
+//   handBackToDefaultNtp,
+//   resetHandbackAttempts,
+// } from "../../features/tab-focus/settings.js";
+
+// function renderDisabledShell(status) {
+//   document.title = "New Tab";
+//   document.documentElement.classList.remove("nt-booting");
+//   document.body.innerHTML = "";
+
+//   const style = document.createElement("style");
+//   style.textContent = `
+//     body { display: grid; place-items: center; min-height: 100vh; margin: 0;
+//       font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+//       background: #ffffff; color: #202124; }
+//     @media (prefers-color-scheme: dark) { body { background: #1b1b1f; color: #e8eaed; } }
+//     .nt-off { text-align: center; padding: 32px; max-width: 520px; }
+//     .nt-off h1 { font-size: 17px; margin: 0 0 6px; }
+//     .nt-off p { margin: 0 0 16px; opacity: .65; font-size: 13px; }
+//     .nt-off code { font-size: 11px; opacity: .5; word-break: break-all; }
+//     .nt-off .actions { display: flex; gap: 8px; justify-content: center; }
+//     .nt-off button { font: inherit; padding: 8px 16px; border-radius: 6px; cursor: pointer;
+//       border: 1px solid #1a73e8; background: #1a73e8; color: #fff; }
+//     .nt-off button.secondary { background: transparent; color: inherit;
+//       border-color: rgba(128,128,128,.5); }
+//   `;
+//   document.head.appendChild(style);
+
+//   const box = document.createElement("div");
+//   box.className = "nt-off";
+//   box.innerHTML = `
+//     <h1>Tab Focus is turned off</h1>
+//     <p>${status}</p>
+//     <div class="actions">
+//       <button type="button" id="ntEnableBtn">Enable Tab Focus</button>
+//       <button type="button" class="secondary" id="ntRetryBtn">Restore browser new tab</button>
+//     </div>
+//     <p><code id="ntDiag"></code></p>
+//   `;
+//   document.body.appendChild(box);
+
+//   const diag = document.getElementById("ntDiag");
+//   if (diag) diag.textContent = location.href;
+
+//   document.getElementById("ntEnableBtn").addEventListener("click", async () => {
+//     await setTabFocusEnabled(true);
+//     resetHandbackAttempts();
+//     window.location.reload();
+//   });
+
+//   document.getElementById("ntRetryBtn").addEventListener("click", () => {
+//     resetHandbackAttempts();
+//     window.location.reload();
+//   });
+// }
+
+// async function bootNewTabPage() {
+//   const enabled = await getTabFocusEnabled();
+
+//   if (!enabled) {
+//     renderDisabledShell("Restoring your browser new tab page…");
+//     const blocked = await handBackToDefaultNtp();
+//     if (blocked) {
+//       renderDisabledShell("Could not hand this tab back to your browser's new tab page.");
+//     }
+//     return;
+//   }
+
+//   initPortalClock();
+//   initBrowserControls();
+//   initSystemThemeWatcher();
+//   loadBrowserDashboard();
+//   document.documentElement.classList.remove("nt-booting");
+// }

@@ -12,6 +12,20 @@ document.addEventListener("DOMContentLoaded", async () => {
   initRetentionDashboard();
   initTimeframeFilters();
 
+  const openVaultBtn = document.getElementById("openVaultBtn");
+  if (openVaultBtn) {
+    openVaultBtn.addEventListener("click", () => {
+      chrome.tabs.create({ url: chrome.runtime.getURL("src/entrypoints/vault/index.html") });
+    });
+  }
+
+  const openSitesBtn = document.getElementById("openSitesBtn");
+  if (openSitesBtn) {
+    openSitesBtn.addEventListener("click", () => {
+      chrome.tabs.create({ url: chrome.runtime.getURL("src/entrypoints/sites/index.html") });
+    });
+  }
+
   await renderQuotes();
   await renderTimeAnalytics("today");
 });

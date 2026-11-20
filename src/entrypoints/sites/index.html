@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Protected Sites</title>
+  <style>
+    :root {
+      --bg-body: #f8fafc;
+      --bg-card: #ffffff;
+      --bg-soft: #f1f5f9;
+      --text-main: #0f172a;
+      --text-muted: #64748b;
+      --border-color: #e2e8f0;
+      --primary: #2563eb;
+      --danger: #dc2626;
+      --ok: #059669;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg-body: #0f172a;
+        --bg-card: #1e293b;
+        --bg-soft: #172033;
+        --text-main: #f8fafc;
+        --text-muted: #94a3b8;
+        --border-color: #334155;
+        --primary: #60a5fa;
+        --danger: #f87171;
+        --ok: #34d399;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; padding: 30px; font: 14px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif;
+      background: var(--bg-body); color: var(--text-main);
+    }
+    .container { max-width: 860px; margin: 0 auto; }
+    header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 6px; }
+    h1 { font-size: 20px; margin: 0; }
+    .sub { color: var(--text-muted); font-size: 13px; margin: 0 0 22px; }
+
+    .card {
+      background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px;
+      padding: 18px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, .05); margin-bottom: 16px;
+    }
+
+    .grid { display: grid; grid-template-columns: 2fr 1.4fr .8fr auto; gap: 10px; align-items: end; }
+    label { display: block; font-size: 12px; color: var(--text-muted); margin-bottom: 4px; }
+    input, select {
+      width: 100%; padding: 9px 11px; border-radius: 8px; font: inherit; font-size: 13px;
+      border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-main);
+    }
+    input:focus, select:focus { outline: 2px solid color-mix(in srgb, var(--primary) 45%, transparent); outline-offset: 1px; }
+    button {
+      padding: 9px 15px; border-radius: 8px; border: none; background: var(--primary); color: #fff;
+      font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap;
+    }
+    button.ghost { background: transparent; color: var(--text-main); border: 1px solid var(--border-color); }
+    button.danger { background: var(--danger); }
+    button.small { padding: 5px 10px; font-size: 12px; }
+    .hint { font-size: 12px; color: var(--text-muted); margin: 10px 0 0; }
+    .error { color: var(--danger); font-size: 12.5px; margin: 8px 0 0; min-height: 17px; }
+
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--border-color); font-size: 13px; }
+    th { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); }
+    tr:last-child td { border-bottom: none; }
+    .pattern { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12.5px; word-break: break-all; }
+    .badge { font-size: 11px; padding: 2px 7px; border-radius: 999px; border: 1px solid var(--border-color); color: var(--text-muted); }
+    .badge.live { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 45%, transparent); }
+    .badge.off { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 45%, transparent); }
+    .row-actions { display: flex; gap: 6px; justify-content: flex-end; }
+    .empty { text-align: center; color: var(--text-muted); padding: 26px; }
+    .presets { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 12px; }
+    .presets button { background: var(--bg-soft); color: var(--text-main); border: 1px solid var(--border-color); font-weight: 500; }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <header>
+      <h1>🔒 Protected Sites</h1>
+      <button class="ghost" id="backVaultBtn">← Secure Pages</button>
+    </header>
+    <p class="sub">
+      Whitelist URL yang minta password extension lebih dulu. Buka link yang terdaftar di sini, dan
+      extension akan menahan tab sampai password dimasukkan.
+    </p>
+
+    <div class="card">
+      <div class="grid">
+        <div>
+          <label for="patternInput">Pattern URL</label>
+          <input type="text" id="patternInput" placeholder="docs.google.com/spreadsheets/*" />
+        </div>
+        <div>
+          <label for="labelInput">Label (opsional)</label>
+          <input type="text" id="labelInput" placeholder="Budget sheet" />
+        </div>
+        <div>
+          <label for="minutesInput">Sesi (menit)</label>
+          <input type="number" id="minutesInput" min="1" max="720" value="30" />
+        </div>
+        <button id="addBtn">+ Tambah</button>
+      </div>
+
+      <div>
+        <label for="passwordInput" style="margin-top: 12px;">Password untuk pattern ini</label>
+        <input type="password" id="passwordInput" placeholder="Minimal 4 karakter" />
+      </div>
+      <p class="error" id="formError"></p>
+
+      <div class="presets" id="presets">
+        <button type="button" data-pattern="docs.google.com/spreadsheets/*">Google Sheets</button>
+        <button type="button" data-pattern="app.notion.com">Notion</button>
+        <button type="button" data-pattern="drive.google.com/drive/*">Google Drive</button>
+        <button type="button" data-pattern="docs.google.com/document/*">Google Docs</button>
+      </div>
+      <p class="hint">
+        <code>*</code> = wildcard. Tanpa <code>/</code>, semua path ikut tercakup.
+        Contoh: <code>app.notion.com/p/Getting-*</code>.
+      </p>
+    </div>
+
+    <div class="card">
+      <table>
+        <thead>
+          <tr>
+            <th>Pattern</th>
+            <th>Label</th>
+            <th>Sesi</th>
+            <th>Status</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="entryRows"></tbody>
+      </table>
+      <div class="empty hidden" id="emptyState">Belum ada pattern. Tambahkan di atas.</div>
+    </div>
+
+    <p class="hint" id="stats">-</p>
+  </div>
+
+  <script type="module" src="index.js"></script>
+</body>
+
+</html>
